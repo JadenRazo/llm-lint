@@ -6,6 +6,8 @@
 
 A SonarQube/gitleaks-style scanner that catches **LLM artifacts** before they ship to production: `CLAUDE.md`, `.claude/`, `Co-authored-by: Claude` commit trailers, `.cursorrules`, GitHub Copilot config, AI refusal text leaked into source, and more.
 
+![demo](demo/demo.gif)
+
 For every finding, `llm-lint` tells you **what** it found, **where**, **why it matters**, and **exactly how to prevent it from happening again** (e.g., for Claude trailers: edit `~/.claude/settings.json` and set `"includeCoAuthoredBy": false`).
 
 ```
