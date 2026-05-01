@@ -1,0 +1,60 @@
+version: 2
+project_name: llm-lint
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - main: ./cmd/llm-lint
+    binary: llm-lint
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: ["tar.gz"]
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "arm64" }}arm64
+      {{- else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: ["zip"]
+
+checksum:
+  name_template: "checksums.txt"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/jadenrazo/llm-lint:{{ .Version }}"
+      - "ghcr.io/jadenrazo/llm-lint:latest"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+      - "--label=org.opencontainers.image.source=https://github.com/JadenRazo/llm-lint"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+release:
+  draft: false
+  prerelease: auto
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^test:"

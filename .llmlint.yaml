@@ -1,0 +1,26 @@
+version: 1
+
+# Project's own dogfood config. Required because this repo legitimately
+# documents and tests the very artifacts we flag.
+ignore:
+  - "testdata/**"
+  - "ci/**"
+  - "examples/**"
+  - "PLAN.md"
+  - "README.md"
+  - ".github/**"
+  - ".goreleaser.yaml"
+  - ".llmlint.yaml"
+
+rules:
+  # The repo's own commit log will reference Claude features in commit
+  # subjects (we're tracking Claude artifacts) — disable the message rule
+  # to avoid recursive flagging on our own meta-commits.
+  LLM004:
+    enabled: false
+  # Source-comment refusal/marker rules don't fit a tool whose docs and
+  # tests intentionally include the literal strings.
+  LLM013:
+    enabled: false
+  LLM014:
+    enabled: false

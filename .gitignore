@@ -1,0 +1,10 @@
+bin/
+dist/
+coverage.out
+coverage.html
+*.sarif
+*.test
+*.out
+.idea/
+.vscode/
+.DS_Store

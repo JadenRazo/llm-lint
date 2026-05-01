@@ -1,0 +1,49 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - run: go vet ./...
+      - run: go test -race -coverprofile=coverage.out ./...
+      - run: go tool cover -func=coverage.out | tail -1
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
+  dogfood:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Self-scan
+        run: go run ./cmd/llm-lint scan --fail-on error

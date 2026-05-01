@@ -1,0 +1,41 @@
+# Example .llmlint.yaml — drop at your repo root and customize.
+# Every key is optional. Defaults are sensible.
+
+version: 1
+
+# Filter to specific categories. Omit for "all".
+# categories:
+#   - claude
+#   - cursor
+#   - copilot
+#   - aider
+#   - continue
+#   - codeium
+#   - windsurf
+#   - generic
+
+# Per-rule overrides
+rules:
+  # Bump info → warning
+  # LLM013:
+  #   severity: warning
+  # Disable a rule
+  # LLM004:
+  #   enabled: false
+
+# Paths to skip (gitignore-style globs)
+ignore:
+  - "vendor/**"
+  - "node_modules/**"
+  - "**/*.min.js"
+  - "**/*.min.css"
+  - "testdata/**"
+
+# Scan modes
+scan:
+  filesystem: true
+  git_history: true
+  git_history_depth: 1000   # 0 = full history
+
+# Exit-code threshold
+fail_on: error              # error | warning | info | none

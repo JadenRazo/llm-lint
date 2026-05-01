@@ -1,0 +1,37 @@
+# Drop this file into your repo at .github/workflows/llm-lint.yml
+# It scans on every push to main/master and every pull request, then uploads
+# results to the GitHub Code Scanning UI as SARIF.
+
+name: llm-lint
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history so commit-trailer rules work
+
+      - name: Install llm-lint
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_Linux_x86_64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin llm-lint
+
+      - name: Scan
+        run: llm-lint scan --format sarif --output llm-lint.sarif --fail-on error
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: llm-lint.sarif
+          category: llm-lint

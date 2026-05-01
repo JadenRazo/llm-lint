@@ -1,0 +1,15 @@
+# Drop this snippet into your .gitlab-ci.yml (or include it as a separate file).
+# Note: GitLab Code Quality JSON conversion is on the v0.2 roadmap; for now
+# this writes a plain JSON artifact you can inspect or post-process.
+
+llm-lint:
+  stage: test
+  image: ghcr.io/jadenrazo/llm-lint:latest
+  variables:
+    GIT_DEPTH: "0"
+  script:
+    - llm-lint scan --format json --output llm-lint.json --fail-on error
+  artifacts:
+    when: always
+    paths:
+      - llm-lint.json
