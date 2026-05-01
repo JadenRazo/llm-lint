@@ -10,9 +10,12 @@ func init() {
 		Category: rules.CatClaude,
 		Kind:     rules.KindGitTrailer,
 		TrailerPatterns: []string{
+			// Anthropic-issued Claude email — the canonical Claude Code trailer.
 			`(?i)^co-authored-by:\s*claude\b.*<[^>]*@anthropic\.com>`,
+			// "Claude Code" name — catches future variants that might omit the email.
+			// Deliberately does NOT match a bare `Claude <…>` since real human
+			// contributors are sometimes named Claude.
 			`(?i)^co-authored-by:\s*claude\s+code\b`,
-			`(?i)^co-authored-by:\s*claude\s*<`,
 		},
 		Description: "Commit trailer attributing co-authorship to Claude. Many production teams strip these to keep `git log` author-clean.",
 		Remediation: `To prevent this on future commits, edit your local Claude Code settings:

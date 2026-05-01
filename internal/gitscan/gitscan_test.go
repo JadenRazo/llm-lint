@@ -102,6 +102,29 @@ func TestGitScan_DetectsClaudeTrailer(t *testing.T) {
 	}
 }
 
+func TestGitScan_HumanNamedClaude_NotFlagged(t *testing.T) {
+	// A real contributor named Claude with a personal (non-Anthropic) email
+	// must not trigger LLM003. Locks in the regex tightening that removed
+	// the over-broad `claude\s*<` pattern.
+	root := makeRepo(t, []commit{
+		{
+			msg:         "feat: thing\n\nCo-authored-by: Claude Dupont <claude@example.com>\n",
+			fileContent: "h", author: "Alice", email: "alice@corp.example",
+		},
+	})
+	cfg := &testCfg{depth: 100}
+	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	res, err := s.Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range res.Matches {
+		if m.Rule.ID == "LLM003" {
+			t.Errorf("LLM003 must not flag a real contributor named Claude with a non-Anthropic email; snippet=%q", m.Snippet)
+		}
+	}
+}
+
 func TestGitScan_DetectsClaudeMessageFooter(t *testing.T) {
 	root := makeRepo(t, []commit{
 		{
