@@ -1,5 +1,5 @@
 # Drop this snippet into your .gitlab-ci.yml (or include it as a separate file).
-# Note: GitLab Code Quality JSON conversion is on the v0.2 roadmap; for now
+# Note: GitLab Code Quality JSON conversion is on the roadmap; for now
 # this writes a plain JSON artifact you can inspect or post-process.
 
 llm-lint:

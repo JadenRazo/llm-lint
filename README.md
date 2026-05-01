@@ -133,7 +133,7 @@ llm-lint:
 # .pre-commit-config.yaml
 repos:
   - repo: https://github.com/JadenRazo/llm-lint
-    rev: v0.1.0
+    rev: v0.2.3
     hooks:
       - id: llm-lint
 ```
@@ -220,7 +220,7 @@ Yes — but commit-trailer rules need history. On `actions/checkout` use `fetch-
 Add the path or pattern to your `.llmlint.yaml` `ignore` list, and/or disable noisy info-level rules (`LLM013`, `LLM014`) for repos that intentionally include LLM strings.
 
 **Can I auto-fix?**
-Not in v0.1.0. We flag and teach; we don't rewrite. Auto-fix (`--fix` mode that adds `.gitignore` entries and runs `git rm --cached`) is on the v0.2 roadmap.
+Not yet. We flag and teach; we don't rewrite. Auto-fix (`--fix` mode that adds `.gitignore` entries and runs `git rm --cached`) is on the roadmap; track [issues](https://github.com/JadenRazo/llm-lint/issues) for progress.
 
 **Why is the npm package scoped (`@jadenrazo/llm-lint`)?**
 The bare `llm-lint` name on npm is squatted by an unrelated project. Scoping under `@jadenrazo` keeps the name unambiguous and the publish path uncomplicated.
