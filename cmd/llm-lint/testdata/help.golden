@@ -1,0 +1,16 @@
+Catch LLM artifacts (CLAUDE.md, Co-authored-by trailers, .cursorrules, etc.) in your codebase.
+
+Usage:
+  llm-lint [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  rules       List or describe rules
+  scan        Scan a repository for LLM artifacts
+  version     Print version
+
+Flags:
+  -h, --help   help for llm-lint
+
+Use "llm-lint [command] --help" for more information about a command.

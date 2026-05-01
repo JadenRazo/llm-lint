@@ -1,0 +1,27 @@
+ID:          LLM003
+Title:       Co-authored-by: Claude trailer
+Severity:    error
+Category:    claude
+Kind:        git_trailer
+
+Description:
+  Commit trailer attributing co-authorship to Claude. Many production teams strip these to keep `git log` author-clean.
+
+Remediation:
+  To prevent this on future commits, edit your local Claude Code settings:
+  
+      # ~/.claude/settings.json
+      {
+        "includeCoAuthoredBy": false
+      }
+  
+  Or run:
+  
+      claude config set includeCoAuthoredBy false
+  
+  To clean history, reword the offending commits with an interactive rebase
+  (git rebase -i <sha>^) or strip them in bulk with:
+  
+      git filter-repo --message-callback '
+        return re.sub(rb"(?im)^co-authored-by:\s*claude.*\n?", b"", message)
+      '

@@ -1,0 +1,73 @@
+{
+  "tool": {
+    "name": "llm-lint",
+    "version": "0.1.0-test"
+  },
+  "scanned": {
+    "files": 42,
+    "commits": 7,
+    "duration_ms": 0
+  },
+  "findings": [
+    {
+      "rule_id": "LLM001",
+      "title": "CLAUDE.md committed",
+      "severity": "error",
+      "category": "claude",
+      "description": "CLAUDE.md is read by Claude Code as repo-specific context.",
+      "remediation": "Add CLAUDE.md to .gitignore and untrack with git rm --cached.",
+      "location": {
+        "kind": "file",
+        "path": "CLAUDE.md"
+      }
+    },
+    {
+      "rule_id": "LLM003",
+      "title": "Co-authored-by: Claude trailer",
+      "severity": "error",
+      "category": "claude",
+      "description": "Commit trailer attributing co-authorship to Claude.",
+      "remediation": "Set includeCoAuthoredBy: false in ~/.claude/settings.json.",
+      "location": {
+        "kind": "commit",
+        "snippet": "Co-authored-by: Claude \u003cnoreply@anthropic.com\u003e",
+        "commit_sha": "abc1234567890abcdef1234567890abcdef12345",
+        "commit_msg": "feat: example",
+        "author": "Alice \u003calice@example.com\u003e"
+      }
+    },
+    {
+      "rule_id": "LLM004",
+      "title": "Claude attribution in commit message",
+      "severity": "warning",
+      "category": "claude",
+      "description": "Commit message body advertises Claude generation.",
+      "remediation": "Set includeCoAuthoredBy: false to stop the footer.",
+      "location": {
+        "kind": "commit",
+        "commit_sha": "def4567890abcdef1234567890abcdef12345678",
+        "commit_msg": "fix: example",
+        "author": "Bob \u003cbob@example.com\u003e"
+      }
+    },
+    {
+      "rule_id": "LLM013",
+      "title": "AI refusal/boilerplate string in source",
+      "severity": "info",
+      "category": "generic",
+      "description": "Telltale LLM refusal text in source.",
+      "remediation": "Remove the offending text or add to .llmlint.yaml ignore.",
+      "location": {
+        "kind": "file",
+        "path": "src/handler.py",
+        "line": 12,
+        "snippet": "    # placeholder refusal note"
+      }
+    }
+  ],
+  "summary": {
+    "error": 2,
+    "warning": 1,
+    "info": 1
+  }
+}

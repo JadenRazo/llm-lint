@@ -1,0 +1,17 @@
+Scan a repository for LLM artifacts
+
+Usage:
+  llm-lint scan [path] [flags]
+
+Flags:
+      --config string     config file path (relative to repo root) (default ".llmlint.yaml")
+      --exclude strings   disable rule IDs (repeatable)
+      --fail-on string    exit non-zero if any finding is at or above this severity (error|warning|info|none) (default "error")
+      --format string     output format: human|json|sarif (default "human")
+  -h, --help              help for scan
+      --include strings   force-enable rule IDs (repeatable)
+      --no-color          disable ANSI color
+      --no-git            skip git history scan
+      --output string     output file or '-' for stdout (default "-")
+      --since string      only scan commits since this git ref/sha
+  -v, --verbose           verbose output

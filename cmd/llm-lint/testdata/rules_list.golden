@@ -1,0 +1,15 @@
+LLM001  error    claude     CLAUDE.md committed
+LLM002  error    claude     .claude/ directory tracked
+LLM003  error    claude     Co-authored-by: Claude trailer
+LLM004  warning  claude     Claude attribution in commit message
+LLM005  warning  claude     Claude scratchpad / notes file
+LLM006  error    cursor     .cursorrules / .cursor/ tracked
+LLM007  warning  copilot    GitHub Copilot config tracked
+LLM008  warning  aider      Aider artifacts tracked
+LLM009  warning  continue   Continue config tracked
+LLM010  warning  codeium    Codeium config tracked
+LLM011  warning  windsurf   Windsurf config tracked
+LLM012  warning  generic    Co-authored-by trailer from another AI tool
+LLM013  info     generic    AI refusal/boilerplate string in source
+LLM014  info     generic    AI generation marker in comment
+LLM015  info     claude     claude-code MCP referenced in .mcp.json

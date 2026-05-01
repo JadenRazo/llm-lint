@@ -1,0 +1,181 @@
+{
+  "version": "2.1.0",
+  "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/JadenRazo/llm-lint",
+          "name": "llm-lint",
+          "rules": [
+            {
+              "id": "LLM001",
+              "name": "CLAUDE.md committed",
+              "shortDescription": {
+                "text": "CLAUDE.md committed"
+              },
+              "fullDescription": {
+                "text": "CLAUDE.md is read by Claude Code as repo-specific context."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Add CLAUDE.md to .gitignore and untrack with git rm --cached."
+              },
+              "properties": {
+                "category": "claude"
+              }
+            },
+            {
+              "id": "LLM003",
+              "name": "Co-authored-by: Claude trailer",
+              "shortDescription": {
+                "text": "Co-authored-by: Claude trailer"
+              },
+              "fullDescription": {
+                "text": "Commit trailer attributing co-authorship to Claude."
+              },
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "help": {
+                "text": "Set includeCoAuthoredBy: false in ~/.claude/settings.json."
+              },
+              "properties": {
+                "category": "claude"
+              }
+            },
+            {
+              "id": "LLM004",
+              "name": "Claude attribution in commit message",
+              "shortDescription": {
+                "text": "Claude attribution in commit message"
+              },
+              "fullDescription": {
+                "text": "Commit message body advertises Claude generation."
+              },
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "help": {
+                "text": "Set includeCoAuthoredBy: false to stop the footer."
+              },
+              "properties": {
+                "category": "claude"
+              }
+            },
+            {
+              "id": "LLM013",
+              "name": "AI refusal/boilerplate string in source",
+              "shortDescription": {
+                "text": "AI refusal/boilerplate string in source"
+              },
+              "fullDescription": {
+                "text": "Telltale LLM refusal text in source."
+              },
+              "defaultConfiguration": {
+                "level": "note"
+              },
+              "help": {
+                "text": "Remove the offending text or add to .llmlint.yaml ignore."
+              },
+              "properties": {
+                "category": "generic"
+              }
+            }
+          ],
+          "version": "0.1.0-test"
+        }
+      },
+      "results": [
+        {
+          "ruleId": "LLM001",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "CLAUDE.md committed"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "CLAUDE.md"
+                },
+                "region": {
+                  "startLine": 1,
+                  "endLine": 1
+                }
+              }
+            }
+          ]
+        },
+        {
+          "properties": {
+            "author": "Alice \u003calice@example.com\u003e",
+            "commit_msg": "feat: example",
+            "commit_sha": "abc1234567890abcdef1234567890abcdef12345"
+          },
+          "ruleId": "LLM003",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": {
+            "text": "Co-authored-by: Claude trailer"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".git/COMMIT_abc1234"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "properties": {
+            "author": "Bob \u003cbob@example.com\u003e",
+            "commit_msg": "fix: example",
+            "commit_sha": "def4567890abcdef1234567890abcdef12345678"
+          },
+          "ruleId": "LLM004",
+          "ruleIndex": 2,
+          "level": "warning",
+          "message": {
+            "text": "Claude attribution in commit message"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": ".git/COMMIT_def4567"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "LLM013",
+          "ruleIndex": 3,
+          "level": "note",
+          "message": {
+            "text": "AI refusal/boilerplate string in source"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "src/handler.py"
+                },
+                "region": {
+                  "startLine": 12,
+                  "endLine": 12
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
