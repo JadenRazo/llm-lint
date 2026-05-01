@@ -84,6 +84,8 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		return nil, stats, err
 	}
 
+	gi := loadGitignoreMatcher(absRoot)
+
 	walkFn := func(path string, info os.FileInfo) error {
 		if info.IsDir() {
 			base := filepath.Base(path)
@@ -91,7 +93,11 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 				return filepath.SkipDir
 			}
 			rel, _ := filepath.Rel(absRoot, path)
-			if rel != "." && s.cfg.IsIgnored(rel+"/") {
+			relSlash := filepath.ToSlash(rel)
+			if rel != "." && s.cfg.IsIgnored(relSlash+"/") {
+				return filepath.SkipDir
+			}
+			if gi.match(relSlash, true) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -111,6 +117,9 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		}
 		rel = filepath.ToSlash(rel)
 		if s.cfg.IsIgnored(rel) {
+			return nil
+		}
+		if gi.match(rel, false) {
 			return nil
 		}
 
