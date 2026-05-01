@@ -8,3 +8,11 @@ coverage.html
 .idea/
 .vscode/
 .DS_Store
+
+# Local-only working files for the project's own development.
+# CLAUDE.md is meta-instructions for working *on* llm-lint;
+# .claude/ holds Claude Code's local state. Both are deliberately untracked
+# (and the scanner would flag them under LLM001/LLM002 if they were committed).
+CLAUDE.md
+.claude/
+

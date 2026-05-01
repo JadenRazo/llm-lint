@@ -18,25 +18,31 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
+      - run: go mod verify
       - run: go vet ./...
       - run: go test -race -coverprofile=coverage.out ./...
-      - run: go tool cover -func=coverage.out | tail -1
+      - name: Coverage threshold
+        # Threshold pinned to current baseline (~82%) minus a small buffer.
+        # Bump when coverage rises sustainably; lower only with explicit
+        # justification in the PR description.
+        env:
+          THRESHOLD: '80'
+        run: |
+          set -euo pipefail
+          COVERAGE=$(go tool cover -func=coverage.out | tail -1 | awk '{print $3}' | tr -d '%')
+          echo "Coverage: ${COVERAGE}% (threshold: ${THRESHOLD}%)"
+          awk -v cov="$COVERAGE" -v th="$THRESHOLD" \
+            'BEGIN { if (cov+0 < th+0) { printf "coverage %s%% below threshold %s%%\n", cov, th; exit 1 } }'
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: coverage.out
+          retention-days: 14
 
   lint:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-      - uses: golangci/golangci-lint-action@v8
-        with:
-          version: latest
-
-  dogfood:
-    runs-on: ubuntu-latest
-    needs: test
     steps:
       - uses: actions/checkout@v4
         with:
@@ -45,5 +51,46 @@ jobs:
         with:
           go-version: '1.25'
           cache: true
-      - name: Self-scan
+      - uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.12.0
+
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  dogfood:
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+      - name: Generate SARIF (always uploads, even on findings)
+        run: go run ./cmd/llm-lint scan --format sarif --output llm-lint.sarif || true
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('llm-lint.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: llm-lint.sarif
+          category: llm-lint
+      - name: Self-scan (gate on error severity)
         run: go run ./cmd/llm-lint scan --fail-on error

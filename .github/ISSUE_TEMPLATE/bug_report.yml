@@ -1,0 +1,47 @@
+name: Bug report
+description: Report unexpected behavior, a regression, or a false-positive/negative finding.
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the actual behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal commands or repository structure that triggers the issue.
+      placeholder: |
+        1. Create a file `foo.go` with content X
+        2. Run `llm-lint scan`
+        3. Observe ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: llm-lint version
+      description: Output of `llm-lint version`.
+      placeholder: v0.1.0
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      description: OS, Go version (`go version`), shell.
+      placeholder: macOS 14.5, Go 1.25.1, zsh
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Logs, config (`.llmlint.yaml`), screenshots if relevant.
