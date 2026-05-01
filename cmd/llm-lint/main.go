@@ -79,7 +79,14 @@ func runScan(cmd *cobra.Command, args []string) error {
 	exclude, _ := cmd.Flags().GetStringSlice("exclude")
 	noGit, _ := cmd.Flags().GetBool("no-git")
 	since, _ := cmd.Flags().GetString("since")
-	cfg.ApplyCLIOverrides(include, exclude, noGit, since)
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
+		Includes: include,
+		Excludes: exclude,
+		NoGit:    noGit,
+		Since:    since,
+	}); err != nil {
+		return err
+	}
 
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	prog := progress.New(os.Stderr, !noProgress)

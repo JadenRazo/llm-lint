@@ -96,19 +96,30 @@ func Load(configPath, root string) (*Config, error) {
 	return cfg, nil
 }
 
-func (c *Config) ApplyCLIOverrides(include, exclude []string, noGit bool, since string) {
-	for _, id := range include {
+// CLIOverrides bundles per-invocation flags that override values from the
+// config file. Future flags add new fields here so we don't churn the
+// ApplyCLIOverrides signature on every CLI addition.
+type CLIOverrides struct {
+	Includes []string
+	Excludes []string
+	NoGit    bool
+	Since    string
+}
+
+func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
+	for _, id := range o.Includes {
 		if id != "" {
 			c.includeRules[id] = true
 		}
 	}
-	for _, id := range exclude {
+	for _, id := range o.Excludes {
 		if id != "" {
 			c.excludeRules[id] = true
 		}
 	}
-	c.noGit = noGit
-	c.since = since
+	c.noGit = o.NoGit
+	c.since = o.Since
+	return nil
 }
 
 func (c *Config) Since() string { return c.since }

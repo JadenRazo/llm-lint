@@ -78,7 +78,9 @@ func TestApplyCLIOverrides_NoGit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ApplyCLIOverrides(nil, nil, true, "")
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{NoGit: true}); err != nil {
+		t.Fatal(err)
+	}
 	if cfg.GitEnabled() {
 		t.Error("--no-git should disable git")
 	}
@@ -89,7 +91,12 @@ func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ApplyCLIOverrides([]string{"LLM099"}, []string{"LLM001"}, false, "")
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
+		Includes: []string{"LLM099"},
+		Excludes: []string{"LLM001"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if cfg.IsRuleEnabled("LLM001") {
 		t.Error("LLM001 should be excluded")
 	}
