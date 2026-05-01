@@ -1,0 +1,14 @@
+version: "2"
+
+linters:
+  default: standard
+  exclusions:
+    rules:
+      - linters: [errcheck]
+        path: internal/report/.*\.go
+        text: "fmt\\.(Fprint|Fprintf|Fprintln|Print|Printf|Println)"
+      - linters: [errcheck]
+        text: "\\.Close"
+
+run:
+  timeout: 3m
