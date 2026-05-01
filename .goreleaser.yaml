@@ -4,6 +4,7 @@ project_name: llm-lint
 before:
   hooks:
     - go mod tidy
+    - go mod verify
 
 builds:
   - main: ./cmd/llm-lint
@@ -12,8 +13,11 @@ builds:
       - CGO_ENABLED=0
     goos: [linux, darwin, windows]
     goarch: [amd64, arm64]
+    flags:
+      - -trimpath
     ldflags:
       - -s -w -X main.version={{.Version}}
+    mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
   - formats: ["tar.gz"]
@@ -26,9 +30,32 @@ archives:
     format_overrides:
       - goos: windows
         formats: ["zip"]
+    files:
+      - LICENSE
+      - README.md
 
 checksum:
   name_template: "checksums.txt"
+  algorithm: sha256
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.spdx.json"
+
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: '${artifact}.pem'
+    args:
+      - sign-blob
+      - '--output-certificate=${certificate}'
+      - '--output-signature=${signature}'
+      - '${artifact}'
+      - '--yes'
+    artifacts: checksum
+    output: true
 
 dockers:
   - image_templates:
@@ -39,9 +66,24 @@ dockers:
     build_flag_templates:
       - "--platform=linux/amd64"
       - "--build-arg=VERSION={{ .Version }}"
+      - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.source=https://github.com/JadenRazo/llm-lint"
+      - "--label=org.opencontainers.image.url=https://github.com/JadenRazo/llm-lint"
+      - "--label=org.opencontainers.image.revision={{ .FullCommit }}"
       - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.created={{ .Date }}"
       - "--label=org.opencontainers.image.licenses=Apache-2.0"
+
+docker_signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    artifacts: images
+    output: true
+    args:
+      - 'sign'
+      - '${artifact}'
+      - '--yes'
 
 release:
   draft: false
