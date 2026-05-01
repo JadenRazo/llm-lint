@@ -9,6 +9,7 @@ import (
 
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/engine"
+	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/report"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 
@@ -55,6 +56,7 @@ func newScanCmd() *cobra.Command {
 	f.String("fail-on", "error", "exit non-zero if any finding is at or above this severity (error|warning|info|none)")
 	f.Bool("no-git", false, "skip git history scan")
 	f.Bool("no-color", false, "disable ANSI color")
+	f.Bool("no-progress", false, "disable the live progress line on stderr")
 	f.String("since", "", "only scan commits since this git ref/sha")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
@@ -79,7 +81,10 @@ func runScan(cmd *cobra.Command, args []string) error {
 	since, _ := cmd.Flags().GetString("since")
 	cfg.ApplyCLIOverrides(include, exclude, noGit, since)
 
-	eng := engine.New(rules.DefaultRegistry(), cfg)
+	noProgress, _ := cmd.Flags().GetBool("no-progress")
+	prog := progress.New(os.Stderr, !noProgress)
+
+	eng := engine.New(rules.DefaultRegistry(), cfg).WithProgress(prog)
 	res, err := eng.Run(path)
 	if err != nil {
 		return err

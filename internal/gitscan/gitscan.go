@@ -12,6 +12,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
+	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 )
 
@@ -67,6 +68,10 @@ func compileRule(r rules.Rule, patterns []string) compiledRule {
 }
 
 func (s *Scanner) Scan(root string) (*Result, error) {
+	return s.ScanWithProgress(root, nil)
+}
+
+func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) (*Result, error) {
 	gitDir := filepath.Join(root, ".git")
 	if _, err := os.Stat(gitDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -107,6 +112,7 @@ func (s *Scanner) Scan(root string) (*Result, error) {
 
 	depth := s.cfg.HistoryDepth()
 	scanned := 0
+	prog.SetCommits(0, depth)
 	err = iter.ForEach(func(c *object.Commit) error {
 		if sinceHash != nil && c.Hash == *sinceHash {
 			return errStopIter
@@ -116,8 +122,12 @@ func (s *Scanner) Scan(root string) (*Result, error) {
 		}
 		scanned++
 		s.applyToCommit(c, res)
+		if scanned%16 == 0 {
+			prog.SetCommits(scanned, depth)
+		}
 		return nil
 	})
+	prog.SetCommits(scanned, depth)
 	if err != nil && !errors.Is(err, errStopIter) {
 		return res, err
 	}

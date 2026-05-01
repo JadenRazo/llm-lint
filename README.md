@@ -2,6 +2,8 @@
 
 [![ci](https://github.com/JadenRazo/llm-lint/actions/workflows/ci.yml/badge.svg)](https://github.com/JadenRazo/llm-lint/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/JadenRazo/llm-lint?display_name=tag&sort=semver)](https://github.com/JadenRazo/llm-lint/releases)
+[![npm](https://img.shields.io/npm/v/%40jadenrazo%2Fllm-lint?label=npm&color=cb3837)](https://www.npmjs.com/package/@jadenrazo/llm-lint)
+[![npm downloads](https://img.shields.io/npm/dm/%40jadenrazo%2Fllm-lint?label=npm%20downloads)](https://www.npmjs.com/package/@jadenrazo/llm-lint)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
 A SonarQube/gitleaks-style scanner that catches **LLM artifacts** before they ship to production: `CLAUDE.md`, `.claude/`, `Co-authored-by: Claude` commit trailers, `.cursorrules`, GitHub Copilot config, AI refusal text leaked into source, and more.
@@ -41,24 +43,38 @@ For every finding, `llm-lint` tells you **what** it found, **where**, **why it m
 
 Run `llm-lint rules show LLM003` for the full description and remediation of any rule.
 
-## Quick start (60 seconds)
+## Quick start
+
+**Run it once, no install:**
 
 ```bash
-# Zero install (Node 18+):
 npx @jadenrazo/llm-lint scan
-
-# Or install globally via npm:
-npm install -g @jadenrazo/llm-lint && llm-lint scan
-
-# Or grab the native binary (Linux/macOS, AMD64/ARM64):
-curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_$(uname -s)_$(uname -m).tar.gz" \
-  | sudo tar -xz -C /usr/local/bin llm-lint && llm-lint scan
-
-# Or pull the Docker image:
-docker run --rm -v "$PWD":/workspace ghcr.io/jadenrazo/llm-lint:latest scan
 ```
 
-The npm package ships native Go binaries via the [esbuild-style optionalDependencies pattern](https://github.com/evanw/esbuild/tree/main/npm) — no postinstall scripts, no Node at runtime, just a tiny shim that execs the matching prebuilt binary for your platform.
+That's the entire setup. Requires Node 18+; works on Linux, macOS (Intel + Apple Silicon), and Windows.
+
+The npm package ships native Go binaries via the [esbuild-style optionalDependencies pattern](https://github.com/evanw/esbuild/tree/main/npm) — npm pulls only the binary matching your platform (~3 MB), with no postinstall scripts and no Node runtime dependency once installed.
+
+<details>
+<summary><b>Other install methods</b></summary>
+
+```bash
+# Persistent install via npm
+npm install -g @jadenrazo/llm-lint
+llm-lint scan
+
+# Native binary, no Node (Linux/macOS, AMD64/ARM64)
+curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_$(uname -s)_$(uname -m).tar.gz" \
+  | sudo tar -xz -C /usr/local/bin llm-lint
+llm-lint scan
+
+# Docker
+docker run --rm -v "$PWD":/workspace ghcr.io/jadenrazo/llm-lint:latest scan
+
+# Homebrew, apt, yum — see https://github.com/JadenRazo/llm-lint/releases
+```
+
+</details>
 
 Exit codes:
 
@@ -70,7 +86,7 @@ Exit codes:
 
 ### GitHub Actions
 
-Drop this into `.github/workflows/llm-lint.yml`. Findings flow into the **Code Scanning** tab via SARIF.
+Drop this into `.github/workflows/llm-lint.yml`. Findings flow into the **Code Scanning** tab via SARIF. Node is preinstalled on `ubuntu-latest`, so `npx` is the shortest path:
 
 ```yaml
 name: llm-lint
@@ -87,14 +103,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }     # full history; required for trailer rules
-      - run: |
-          curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_Linux_x86_64.tar.gz" \
-            | sudo tar -xz -C /usr/local/bin llm-lint
-      - run: llm-lint scan --format sarif --output llm-lint.sarif --fail-on error
+      - run: npx -y @jadenrazo/llm-lint@latest scan --format sarif --output llm-lint.sarif --fail-on error
       - uses: github/codeql-action/upload-sarif@v3
         if: always()
         with: { sarif_file: llm-lint.sarif }
 ```
+
+Pin a specific version (`@jadenrazo/llm-lint@0.2.1`) for reproducible runs.
 
 ### GitLab CI
 

@@ -14,6 +14,7 @@ import (
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/saracen/walker"
 
+	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 )
 
@@ -68,6 +69,10 @@ func New(cfg Config, allRules map[string]rules.Rule) (*Scanner, error) {
 }
 
 func (s *Scanner) Scan(root string) ([]rules.Match, Stats, error) {
+	return s.ScanWithProgress(root, nil)
+}
+
+func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
 	var stats Stats
 	var (
 		mu      sync.Mutex
@@ -110,6 +115,7 @@ func (s *Scanner) Scan(root string) ([]rules.Match, Stats, error) {
 		}
 
 		atomic.AddInt64(&stats.FilesScanned, 1)
+		prog.IncFile()
 
 		var fileMatches []rules.Match
 		for _, r := range s.pathRules {

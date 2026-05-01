@@ -7,6 +7,7 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/gitscan"
+	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 	"github.com/JadenRazo/llm-lint/internal/scanner"
 )
@@ -25,22 +26,37 @@ type Result struct {
 type Engine struct {
 	allRules map[string]rules.Rule
 	cfg      *config.Config
+	prog     *progress.Reporter
 }
 
 func New(allRules map[string]rules.Rule, cfg *config.Config) *Engine {
 	return &Engine{allRules: allRules, cfg: cfg}
 }
 
+// WithProgress wires a progress reporter that ticks during scan.
+// Pass nil (or skip) to disable.
+func (e *Engine) WithProgress(p *progress.Reporter) *Engine {
+	e.prog = p
+	return e
+}
+
 func (e *Engine) Run(root string) (*Result, error) {
 	start := time.Now()
 	res := &Result{}
+
+	if e.prog != nil {
+		defer e.prog.Done()
+	}
 
 	if e.cfg.FilesystemEnabled() {
 		s, err := scanner.New(e.cfg, e.allRules)
 		if err != nil {
 			return nil, fmt.Errorf("scanner init: %w", err)
 		}
-		matches, stats, err := s.Scan(root)
+		if e.prog != nil {
+			e.prog.Phase("files")
+		}
+		matches, stats, err := s.ScanWithProgress(root, e.prog)
 		if err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
@@ -52,7 +68,10 @@ func (e *Engine) Run(root string) (*Result, error) {
 
 	if e.cfg.GitEnabled() {
 		gs := gitscan.New(e.allRules, e.cfg)
-		gres, err := gs.Scan(root)
+		if e.prog != nil {
+			e.prog.Phase("git")
+		}
+		gres, err := gs.ScanWithProgress(root, e.prog)
 		if err != nil {
 			res.GitSkipped = true
 			res.GitSkippedNote = err.Error()
