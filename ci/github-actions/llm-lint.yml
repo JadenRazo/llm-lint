@@ -23,7 +23,8 @@ jobs:
       - name: Install llm-lint
         run: |
           set -euo pipefail
-          curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_Linux_x86_64.tar.gz" \
+          arch=$(uname -m); [ "$arch" = aarch64 ] && arch=arm64
+          curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_Linux_${arch}.tar.gz" \
             | sudo tar -xz -C /usr/local/bin llm-lint
 
       - name: Scan

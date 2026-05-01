@@ -64,7 +64,8 @@ npm install -g @jadenrazo/llm-lint
 llm-lint scan
 
 # Native binary, no Node (Linux/macOS, AMD64/ARM64)
-curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_$(uname -s)_$(uname -m).tar.gz" \
+arch=$(uname -m); [ "$arch" = aarch64 ] && arch=arm64
+curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_$(uname -s)_${arch}.tar.gz" \
   | sudo tar -xz -C /usr/local/bin llm-lint
 llm-lint scan
 
