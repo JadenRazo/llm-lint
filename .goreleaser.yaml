@@ -65,7 +65,6 @@ dockers:
     use: buildx
     build_flag_templates:
       - "--platform=linux/amd64"
-      - "--build-arg=VERSION={{ .Version }}"
       - "--label=org.opencontainers.image.title={{ .ProjectName }}"
       - "--label=org.opencontainers.image.source=https://github.com/JadenRazo/llm-lint"
       - "--label=org.opencontainers.image.url=https://github.com/JadenRazo/llm-lint"

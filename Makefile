@@ -21,8 +21,11 @@ fmt:
 	gofmt -s -w .
 	go mod tidy
 
-docker:
-	docker build -t llm-lint:$(VERSION) --build-arg VERSION=$(VERSION) .
+docker: build
+	@tmp=$$(mktemp -d) && \
+		cp bin/llm-lint Dockerfile $$tmp/ && \
+		docker build -t llm-lint:$(VERSION) $$tmp && \
+		rm -rf $$tmp
 
 run: build
 	./bin/llm-lint scan
