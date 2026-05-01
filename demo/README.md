@@ -18,6 +18,16 @@ Runtime requirements:
 
 To tweak timing, theme, or scene order, edit [`demo.tape`](demo.tape) and re-run. See the [vhs reference](https://github.com/charmbracelet/vhs#vhs-command-reference) for syntax.
 
+### `demo-short.gif` — LinkedIn / social cut (~27s)
+
+Trimmed from `demo.gif` — keeps Scenes 1 and 2 (artifacts land, scan surfaces findings) and drops the `rules show` drill-down. Regenerate with:
+
+```sh
+ffmpeg -y -i demo/demo.gif \
+  -vf "fps=25,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+  -t 27.5 demo/demo-short.gif
+```
+
 ## `seed-demo-pr.sh` — GitHub PR with red CI checks
 
 For screenshots of the CI gate firing in a real PR (Code Scanning tab, failing checks, inline annotations).
