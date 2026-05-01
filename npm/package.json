@@ -40,8 +40,5 @@
     "@jadenrazo/llm-lint-darwin-arm64": "0.0.0-dev",
     "@jadenrazo/llm-lint-win32-x64": "0.0.0-dev",
     "@jadenrazo/llm-lint-win32-arm64": "0.0.0-dev"
-  },
-  "scripts": {
-    "test": "node bin/llm-lint.js version || true"
   }
 }
