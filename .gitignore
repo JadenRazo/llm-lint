@@ -1,10 +1,13 @@
-bin/
-dist/
+/bin/
+/dist/
 coverage.out
 coverage.html
 *.sarif
 *.test
 *.out
+*.tgz
+npm/build/
+node_modules/
 .idea/
 .vscode/
 .DS_Store

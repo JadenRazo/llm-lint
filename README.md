@@ -44,16 +44,21 @@ Run `llm-lint rules show LLM003` for the full description and remediation of any
 ## Quick start (60 seconds)
 
 ```bash
-# Install (Linux/macOS, AMD64/ARM64)
+# Zero install (Node 18+):
+npx @jadenrazo/llm-lint scan
+
+# Or install globally via npm:
+npm install -g @jadenrazo/llm-lint && llm-lint scan
+
+# Or grab the native binary (Linux/macOS, AMD64/ARM64):
 curl -sSfL "https://github.com/JadenRazo/llm-lint/releases/latest/download/llm-lint_$(uname -s)_$(uname -m).tar.gz" \
-  | sudo tar -xz -C /usr/local/bin llm-lint
+  | sudo tar -xz -C /usr/local/bin llm-lint && llm-lint scan
 
-# Or pull the Docker image
-docker pull ghcr.io/jadenrazo/llm-lint:latest
-
-# Scan the current repo
-llm-lint scan
+# Or pull the Docker image:
+docker run --rm -v "$PWD":/workspace ghcr.io/jadenrazo/llm-lint:latest scan
 ```
+
+The npm package ships native Go binaries via the [esbuild-style optionalDependencies pattern](https://github.com/evanw/esbuild/tree/main/npm) — no postinstall scripts, no Node at runtime, just a tiny shim that execs the matching prebuilt binary for your platform.
 
 Exit codes:
 
@@ -200,6 +205,9 @@ Add the path or pattern to your `.llmlint.yaml` `ignore` list, and/or disable no
 
 **Can I auto-fix?**
 Not in v0.1.0. We flag and teach; we don't rewrite. Auto-fix (`--fix` mode that adds `.gitignore` entries and runs `git rm --cached`) is on the v0.2 roadmap.
+
+**Why is the npm package scoped (`@jadenrazo/llm-lint`)?**
+The bare `llm-lint` name on npm is squatted by an unrelated project. Scoping under `@jadenrazo` keeps the name unambiguous and the publish path uncomplicated.
 
 ## Contributing
 

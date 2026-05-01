@@ -95,3 +95,18 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node for npm publish
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build npm packages
+        run: node npm/scripts/build.mjs --version "${GITHUB_REF_NAME#v}"
+
+      - name: Publish to npm
+        run: node npm/scripts/publish.mjs --version "${GITHUB_REF_NAME#v}" --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"

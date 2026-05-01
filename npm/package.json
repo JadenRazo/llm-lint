@@ -1,0 +1,47 @@
+{
+  "name": "@jadenrazo/llm-lint",
+  "version": "0.0.0-dev",
+  "description": "Scan repositories for LLM-tooling artifacts: CLAUDE.md, .claude/, Co-authored-by: Claude trailers, .cursorrules, Copilot config, AI refusal text, and more.",
+  "keywords": [
+    "llm",
+    "lint",
+    "claude",
+    "cursor",
+    "copilot",
+    "ai",
+    "scanner",
+    "sarif",
+    "ci",
+    "static-analysis"
+  ],
+  "homepage": "https://github.com/JadenRazo/llm-lint#readme",
+  "bugs": "https://github.com/JadenRazo/llm-lint/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JadenRazo/llm-lint.git"
+  },
+  "license": "Apache-2.0",
+  "author": "Jaden Razo",
+  "bin": {
+    "llm-lint": "bin/llm-lint.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@jadenrazo/llm-lint-linux-x64": "0.0.0-dev",
+    "@jadenrazo/llm-lint-linux-arm64": "0.0.0-dev",
+    "@jadenrazo/llm-lint-darwin-x64": "0.0.0-dev",
+    "@jadenrazo/llm-lint-darwin-arm64": "0.0.0-dev",
+    "@jadenrazo/llm-lint-win32-x64": "0.0.0-dev",
+    "@jadenrazo/llm-lint-win32-arm64": "0.0.0-dev"
+  },
+  "scripts": {
+    "test": "node bin/llm-lint.js version || true"
+  }
+}
