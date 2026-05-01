@@ -179,11 +179,12 @@ func (r *Reporter) write(line string) {
 	defer r.writeMu.Unlock()
 	// Pad with spaces to overwrite any longer leftover from a previous frame,
 	// then carriage-return the cursor back to column 0 for the next frame.
+	// Errors writing to a terminal are unactionable here; discard them.
 	pad := r.lastLen - len(line)
 	if pad < 0 {
 		pad = 0
 	}
-	fmt.Fprintf(r.w, "\r%s%s", line, strings.Repeat(" ", pad))
+	_, _ = fmt.Fprintf(r.w, "\r%s%s", line, strings.Repeat(" ", pad))
 	r.lastLen = len(line)
 }
 
@@ -193,7 +194,7 @@ func (r *Reporter) clearLine() {
 	if r.lastLen == 0 {
 		return
 	}
-	fmt.Fprintf(r.w, "\r%s\r", strings.Repeat(" ", r.lastLen))
+	_, _ = fmt.Fprintf(r.w, "\r%s\r", strings.Repeat(" ", r.lastLen))
 	r.lastLen = 0
 }
 
