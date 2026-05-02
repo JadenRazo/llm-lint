@@ -429,6 +429,69 @@ func TestUninstall_BothRequiresType(t *testing.T) {
 	}
 }
 
+func TestUninstall_FrameworkRemovesEntry(t *testing.T) {
+	root := initRepo(t)
+	if _, err := hook.Install(hook.InstallOptions{
+		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "0.1.2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := hook.Uninstall(root, hook.ModeFramework)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.State != hook.StateNotInstalled {
+		t.Errorf("state after framework uninstall: got %q want not-installed", st.State)
+	}
+	body := read(t, frameworkPath(root))
+	if strings.Contains(body, hook.RepoURL) {
+		t.Errorf("config must not reference llm-lint repo after uninstall; got\n%s", body)
+	}
+}
+
+func TestUninstall_FrameworkPreservesOtherRepos(t *testing.T) {
+	root := initRepo(t)
+	existing := `repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.0.0
+    hooks:
+      - id: trailing-whitespace
+`
+	if err := os.WriteFile(frameworkPath(root), []byte(existing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hook.Install(hook.InstallOptions{
+		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "0.1.2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := hook.Uninstall(root, hook.ModeFramework); err != nil {
+		t.Fatal(err)
+	}
+	body := read(t, frameworkPath(root))
+	if !strings.Contains(body, "pre-commit-hooks") {
+		t.Errorf("uninstall must preserve unrelated repo entries; got\n%s", body)
+	}
+	if strings.Contains(body, hook.RepoURL) {
+		t.Errorf("llm-lint block should be gone; got\n%s", body)
+	}
+	if !strings.Contains(body, "id: trailing-whitespace") {
+		t.Errorf("unrelated hook entry should remain; got\n%s", body)
+	}
+}
+
+func TestUninstall_FrameworkNoConfig_NoError(t *testing.T) {
+	root := initRepo(t)
+	// No .pre-commit-config.yaml present at all.
+	st, err := hook.Uninstall(root, hook.ModeFramework)
+	if err != nil {
+		t.Fatalf("framework uninstall on missing config should be no-op; got %v", err)
+	}
+	if st.State != hook.StateNotInstalled {
+		t.Errorf("state: got %q want not-installed", st.State)
+	}
+}
+
 func TestInstall_NotARepo_Errors(t *testing.T) {
 	d := t.TempDir()
 	_, err := hook.Install(hook.InstallOptions{
