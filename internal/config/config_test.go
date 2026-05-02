@@ -105,6 +105,113 @@ func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
 	}
 }
 
+func TestApplyCLIOverrides_BaselineFlags(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.BaselineEnabled() {
+		t.Error("baseline should default to enabled")
+	}
+	if cfg.BaselinePath() != "" {
+		t.Errorf("default BaselinePath should be empty; got %q", cfg.BaselinePath())
+	}
+	if cfg.BaselineStaleAction() != "warn" {
+		t.Errorf("default stale_action should be warn; got %q", cfg.BaselineStaleAction())
+	}
+	if !cfg.BaselineIncludeSnippets() {
+		t.Error("include_snippets should default to true")
+	}
+	if cfg.Since() != "" || cfg.StagedOnly() {
+		t.Error("Since/StagedOnly should default to zero")
+	}
+
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
+		Since:             "HEAD~5",
+		BaselinePath:      "custom-baseline.yaml",
+		NoBaseline:        true,
+		BaselineStaleFail: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Since() != "HEAD~5" {
+		t.Errorf("Since: got %q want HEAD~5", cfg.Since())
+	}
+	if cfg.BaselineEnabled() {
+		t.Error("--no-baseline should disable baseline")
+	}
+	if cfg.BaselinePath() != "custom-baseline.yaml" {
+		t.Errorf("BaselinePath: got %q want custom-baseline.yaml", cfg.BaselinePath())
+	}
+	if cfg.BaselineStaleAction() != "fail" {
+		t.Errorf("--baseline-stale-fail should override stale_action to 'fail'; got %q", cfg.BaselineStaleAction())
+	}
+}
+
+func TestApplyCLIOverrides_StagedOnlyAndSinceMutex(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cfg.ApplyCLIOverrides(config.CLIOverrides{StagedOnly: true, Since: "HEAD~1"})
+	if err == nil {
+		t.Error("expected error when --staged-only and --since are both set")
+	}
+}
+
+func TestApplyCLIOverrides_StagedOnly(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{StagedOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.StagedOnly() {
+		t.Error("StagedOnly should be true after CLI override")
+	}
+}
+
+func TestBaselineConfig_FileOverridesAndIncludeSnippetsFalse(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+baseline:
+  path: custom/path.yaml
+  stale_action: ignore
+  include_snippets: false
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(".llmlint.yaml", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.BaselinePath() != "custom/path.yaml" {
+		t.Errorf("BaselinePath: got %q want custom/path.yaml", cfg.BaselinePath())
+	}
+	if cfg.BaselineStaleAction() != "ignore" {
+		t.Errorf("stale_action: got %q want ignore", cfg.BaselineStaleAction())
+	}
+	if cfg.BaselineIncludeSnippets() {
+		t.Error("include_snippets=false should disable snippets")
+	}
+}
+
+func TestLoad_RejectsInvalidStaleAction(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+baseline:
+  stale_action: explode
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for invalid stale_action; got nil")
+	}
+}
+
 func TestCategoriesFilter(t *testing.T) {
 	dir := t.TempDir()
 	yaml := `version: 1
