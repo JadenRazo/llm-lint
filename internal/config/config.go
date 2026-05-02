@@ -35,6 +35,7 @@ type Config struct {
 	excludeRules map[string]bool
 	noGit        bool
 	since        string
+	stagedOnly   bool
 	root         string
 }
 
@@ -100,13 +101,17 @@ func Load(configPath, root string) (*Config, error) {
 // config file. Future flags add new fields here so we don't churn the
 // ApplyCLIOverrides signature on every CLI addition.
 type CLIOverrides struct {
-	Includes []string
-	Excludes []string
-	NoGit    bool
-	Since    string
+	Includes   []string
+	Excludes   []string
+	NoGit      bool
+	Since      string
+	StagedOnly bool
 }
 
 func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
+	if o.StagedOnly && o.Since != "" {
+		return errors.New("--staged-only and --since are mutually exclusive")
+	}
 	for _, id := range o.Includes {
 		if id != "" {
 			c.includeRules[id] = true
@@ -119,10 +124,13 @@ func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
 	}
 	c.noGit = o.NoGit
 	c.since = o.Since
+	c.stagedOnly = o.StagedOnly
 	return nil
 }
 
 func (c *Config) Since() string { return c.since }
+
+func (c *Config) StagedOnly() bool { return c.stagedOnly }
 
 func (c *Config) GitEnabled() bool {
 	if c.noGit {

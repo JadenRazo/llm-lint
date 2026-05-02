@@ -15,4 +15,5 @@ Flags:
       --no-progress       disable the live progress line on stderr
       --output string     output file or '-' for stdout (default "-")
       --since string      only scan commits since this git ref/sha
+      --staged-only       scan files staged in the git index instead of the working tree (skips trailer/message rules)
   -v, --verbose           verbose output

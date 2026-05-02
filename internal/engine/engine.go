@@ -56,7 +56,15 @@ func (e *Engine) Run(root string) (*Result, error) {
 		if e.prog != nil {
 			e.prog.Phase("files")
 		}
-		matches, stats, err := s.ScanWithProgress(root, e.prog)
+		var (
+			matches []rules.Match
+			stats   scanner.Stats
+		)
+		if e.cfg.StagedOnly() {
+			matches, stats, err = s.ScanIndex(root, e.prog)
+		} else {
+			matches, stats, err = s.ScanWithProgress(root, e.prog)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
 		}
@@ -66,7 +74,7 @@ func (e *Engine) Run(root string) (*Result, error) {
 		res.FilesScanned = stats.FilesScanned
 	}
 
-	if e.cfg.GitEnabled() {
+	if e.cfg.GitEnabled() && !e.cfg.StagedOnly() {
 		gs := gitscan.New(e.allRules, e.cfg)
 		if e.prog != nil {
 			e.prog.Phase("git")

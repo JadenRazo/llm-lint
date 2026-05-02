@@ -101,6 +101,64 @@ func TestEngine_E2E_DirtyFixture(t *testing.T) {
 	}
 }
 
+func TestEngine_E2E_StagedOnly_SkipsTrailerRules(t *testing.T) {
+	// Staged-only mode reads the git index for path+content rules and
+	// skips trailer/message rules entirely (no commit yet at pre-commit
+	// time). A commit with a Claude trailer must NOT fire LLM003 here.
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "marker.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := git.PlainInit(root, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wt, err := repo.Worktree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wt.Add("marker.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wt.Commit("feat: marker\n\nCo-authored-by: Claude <noreply@anthropic.com>\n", &git.CommitOptions{
+		Author: &object.Signature{Name: "Tester", Email: "t@example.com", When: time.Now()},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Stage CLAUDE.md (path rule LLM001) but do not commit it.
+	if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte("context\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := wt.Add("CLAUDE.md"); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(".llmlint.yaml", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{StagedOnly: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := engine.New(rules.DefaultRegistry(), cfg).Run(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := map[string]int{}
+	for _, f := range res.Findings {
+		got[f.RuleID]++
+	}
+	if got["LLM001"] != 1 {
+		t.Errorf("staged CLAUDE.md should fire LLM001 once; got %d (all=%v)", got["LLM001"], got)
+	}
+	if got["LLM003"] != 0 {
+		t.Errorf("staged-only must skip trailer rules; got LLM003 count %d (all=%v)", got["LLM003"], got)
+	}
+}
+
 func TestEngine_E2E_CleanRepo_NoFindings(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# clean\n"), 0o644); err != nil {

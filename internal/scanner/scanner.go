@@ -137,9 +137,9 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		}
 
 		if len(s.contentRules) > 0 && info.Size() <= maxContentSize {
-			contentMatches := s.scanContent(path, rel, info.Size())
+			contentMatches, n := s.scanContent(path, rel, info.Size())
 			fileMatches = append(fileMatches, contentMatches...)
-			atomic.AddInt64(&stats.BytesRead, info.Size())
+			atomic.AddInt64(&stats.BytesRead, n)
 		}
 
 		if len(fileMatches) > 0 {
@@ -163,12 +163,22 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 	return matches, stats, nil
 }
 
-func (s *Scanner) scanContent(absPath, rel string, size int64) []rules.Match {
+func (s *Scanner) scanContent(absPath, rel string, size int64) ([]rules.Match, int64) {
 	if size == 0 {
-		return nil
+		return nil, 0
 	}
 	data, err := os.ReadFile(absPath)
 	if err != nil {
+		return nil, 0
+	}
+	return s.applyContentRules(rel, data), int64(len(data))
+}
+
+// applyContentRules runs the compiled content-rule regex set against an
+// in-memory buffer. Used by both filesystem (scanContent) and index
+// (ScanIndex) iterators. Returns nil for binary content.
+func (s *Scanner) applyContentRules(rel string, data []byte) []rules.Match {
+	if len(data) == 0 {
 		return nil
 	}
 	if isBinary(data) {

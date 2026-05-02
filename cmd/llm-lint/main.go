@@ -58,6 +58,7 @@ func newScanCmd() *cobra.Command {
 	f.Bool("no-color", false, "disable ANSI color")
 	f.Bool("no-progress", false, "disable the live progress line on stderr")
 	f.String("since", "", "only scan commits since this git ref/sha")
+	f.Bool("staged-only", false, "scan files staged in the git index instead of the working tree (skips trailer/message rules)")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.BoolP("verbose", "v", false, "verbose output")
@@ -79,11 +80,13 @@ func runScan(cmd *cobra.Command, args []string) error {
 	exclude, _ := cmd.Flags().GetStringSlice("exclude")
 	noGit, _ := cmd.Flags().GetBool("no-git")
 	since, _ := cmd.Flags().GetString("since")
+	stagedOnly, _ := cmd.Flags().GetBool("staged-only")
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes: include,
-		Excludes: exclude,
-		NoGit:    noGit,
-		Since:    since,
+		Includes:   include,
+		Excludes:   exclude,
+		NoGit:      noGit,
+		Since:      since,
+		StagedOnly: stagedOnly,
 	}); err != nil {
 		return err
 	}
