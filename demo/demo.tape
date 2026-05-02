@@ -10,7 +10,7 @@ Set FontSize 14
 Set Width 1200
 Set Height 720
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 50ms
+Set TypingSpeed 30ms
 Set CursorBlink false
 Set Margin 20
 Set MarginFill "#0a0a0a"
@@ -32,11 +32,7 @@ Enter
 Sleep 300ms
 Show
 
-# --- Scene 1: the artifacts land. ---
-Type "# A feature branch lands with the usual LLM crumbs."
-Sleep 1500ms
-Enter
-
+# --- Scene 1: the artifacts land. Visual story carries it — no narration. ---
 Type "echo 'project context for Claude' > CLAUDE.md"
 Sleep 300ms
 Enter
@@ -51,14 +47,14 @@ Enter
 Sleep 1500ms
 
 # --- Scene 2: scan and surface findings. One command, no install. ---
-Type "# Catch them before they merge — no install needed:"
-Sleep 1500ms
+Type "# No install needed:"
+Sleep 800ms
 Enter
 
 Type "npx @jadenrazo/llm-lint scan"
 Sleep 300ms
 Enter
-Sleep 7s
+Sleep 6s
 
 # --- Scene 3: drill into a rule's full remediation. ---
 Type "# Every finding ships with concrete remediation:"
