@@ -1,6 +1,7 @@
 package engine_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/JadenRazo/llm-lint/internal/engine"
@@ -77,5 +78,56 @@ func TestExceedsThreshold_UnknownLevelTreatedAsZero(t *testing.T) {
 	res := &engine.Result{Findings: []findings.Finding{makeFinding(rules.SevInfo)}}
 	if !engine.ExceedsThreshold(res, "garbage") {
 		t.Error("unknown severity string should rank as 0 and be exceeded by any finding")
+	}
+}
+
+func TestValidateFailOn(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		input     string
+		wantErr   bool
+		wantInMsg []string // substrings the error message must contain
+	}{
+		// Accepted values — exact set the CLI gate recognizes.
+		{name: "accept/error", input: "error", wantErr: false},
+		{name: "accept/warning", input: "warning", wantErr: false},
+		{name: "accept/info", input: "info", wantErr: false},
+		{name: "accept/none", input: "none", wantErr: false},
+
+		// Rejected values. Empty string must reject so the runScan
+		// resolution chain can't fall through to ExceedsThreshold with "".
+		{name: "reject/empty-string", input: "", wantErr: true},
+		// Asserts the error surface for a refactor: the literal prefix
+		// "invalid --fail-on" and the offending value must be retained.
+		{name: "reject/garbage", input: "garbage", wantErr: true, wantInMsg: []string{"invalid --fail-on", "garbage"}},
+		// Case-sensitive — confirm uppercase aliases are not accepted.
+		{name: "reject/uppercase-ERROR", input: "ERROR", wantErr: true},
+		// Common typo — must not be silently accepted as "warning".
+		{name: "reject/warn-typo", input: "warn", wantErr: true},
+		// Plural typo — close to "error" but distinct.
+		{name: "reject/errors-typo", input: "errors", wantErr: true},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			err := engine.ValidateFailOn(tc.input)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("ValidateFailOn(%q) = nil, want non-nil error", tc.input)
+				}
+				for _, sub := range tc.wantInMsg {
+					if !strings.Contains(err.Error(), sub) {
+						t.Errorf("ValidateFailOn(%q) error %q missing substring %q", tc.input, err.Error(), sub)
+					}
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("ValidateFailOn(%q) = %v, want nil", tc.input, err)
+			}
+		})
 	}
 }
