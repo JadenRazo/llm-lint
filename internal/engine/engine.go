@@ -119,6 +119,19 @@ func (e *Engine) Run(root string) (*Result, error) {
 	return res, nil
 }
 
+// ValidateFailOn rejects --fail-on values the CLI doesn't recognize before
+// they reach ExceedsThreshold (where unknown strings rank as 0 and silently
+// trip on every finding). Lives here, not in internal/rules, because the
+// engine package owns the same set of valid strings via ExceedsThreshold.
+func ValidateFailOn(s string) error {
+	switch s {
+	case "error", "warning", "info", "none":
+		return nil
+	default:
+		return fmt.Errorf("invalid --fail-on %q (want error|warning|info|none)", s)
+	}
+}
+
 func ExceedsThreshold(r *Result, failOn string) bool {
 	threshold := rules.Severity(failOn).Rank()
 	if failOn == "" || failOn == "none" {

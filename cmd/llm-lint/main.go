@@ -55,7 +55,7 @@ func newScanCmd() *cobra.Command {
 	f.String("config", ".llmlint.yaml", "config file path (relative to repo root)")
 	f.String("format", "human", "output format: human|json|sarif|github (auto-detects to github when GITHUB_ACTIONS=true)")
 	f.String("output", "-", "output file or '-' for stdout")
-	f.String("fail-on", "error", "exit non-zero if any finding is at or above this severity (error|warning|info|none)")
+	f.String("fail-on", "", "exit non-zero if any finding is at or above this severity (error|warning|info|none) (default: config file's fail_on or \"error\")")
 	f.Bool("no-git", false, "skip git history scan")
 	f.Bool("no-color", false, "disable ANSI color")
 	f.Bool("no-progress", false, "disable the live progress line on stderr")
@@ -146,7 +146,16 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Resolve effective --fail-on: CLI flag wins, then config-file fail_on,
+	// then the default "error" baked into config.Load. Empty flag default
+	// lets us tell "user didn't pass it" apart from "user passed error".
 	failOn, _ := cmd.Flags().GetString("fail-on")
+	if failOn == "" {
+		failOn = string(cfg.FailOn)
+	}
+	if err := engine.ValidateFailOn(failOn); err != nil {
+		return err
+	}
 	if engine.ExceedsThreshold(res, failOn) {
 		os.Exit(1)
 	}

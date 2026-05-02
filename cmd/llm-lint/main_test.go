@@ -11,6 +11,11 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/JadenRazo/llm-lint/internal/config"
+	"github.com/JadenRazo/llm-lint/internal/engine"
+	"github.com/JadenRazo/llm-lint/internal/findings"
+	"github.com/JadenRazo/llm-lint/internal/rules"
+
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
 
@@ -162,5 +167,118 @@ func TestCLI_UnknownCommand_Errors(t *testing.T) {
 	cmd.SetArgs([]string{"frobnicate"})
 	if err := cmd.Execute(); err == nil {
 		t.Error("expected error for unknown subcommand")
+	}
+}
+
+// TestFailOn_FlagDefaultIsEmpty pins the cobra default for --fail-on to
+// "" (empty). This is the contract the resolution chain in runScan
+// depends on — if cobra's default were "error" again, runScan couldn't
+// distinguish "user passed --fail-on error" from "user passed nothing"
+// and the config-file fail_on would be silently overridden. The
+// resolution-chain test below assumes this default; this test pins it.
+func TestFailOn_FlagDefaultIsEmpty(t *testing.T) {
+	cmd := newScanCmd()
+	got, err := cmd.Flags().GetString("fail-on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("--fail-on default must be \"\" so cfg.FailOn can win when the user omits the flag; got %q", got)
+	}
+}
+
+// TestFailOn_ConfigFileHonoredWhenFlagAbsent is a regression for the bug
+// where the cobra default of "error" for --fail-on always won over the
+// config-file fail_on. We don't drive the full CLI (runScan calls
+// os.Exit(1) on threshold breach, which would kill the test process);
+// instead we cover the resolution chain at the level where the bug lived:
+//
+//  1. config.Load reads `fail_on: warning` from .llmlint.yaml into cfg.FailOn.
+//  2. The resolution rule (CLI flag if non-empty, else cfg.FailOn) yields "warning".
+//  3. engine.ExceedsThreshold("warning") trips on a warning-level finding.
+//
+// Before the fix, step 2 always produced "error" (since the cobra default
+// was "error", indistinguishable from "user passed error"), and step 3
+// didn't trip — so a warning-only repo silently exited 0.
+func TestFailOn_ConfigFileHonoredWhenFlagAbsent(t *testing.T) {
+	root := t.TempDir()
+
+	// CLAUDE.md fires LLM001 (warning severity) — typical "dirty repo" finding.
+	if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte("context\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	yamlBody := "version: 1\nfail_on: warning\nscan:\n  git_history: false\n"
+	if err := os.WriteFile(filepath.Join(root, ".llmlint.yaml"), []byte(yamlBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(".llmlint.yaml", root)
+	if err != nil {
+		t.Fatalf("config.Load: %v", err)
+	}
+	if cfg.FailOn != rules.SevWarning {
+		t.Fatalf("config.Load did not parse fail_on: warning; got %q", cfg.FailOn)
+	}
+
+	// Mirror runScan's resolution: empty CLI flag -> fall through to cfg.FailOn.
+	flagValue := ""
+	failOn := flagValue
+	if failOn == "" {
+		failOn = string(cfg.FailOn)
+	}
+	if failOn != "warning" {
+		t.Fatalf("resolved fail-on should be %q, got %q", "warning", failOn)
+	}
+	if err := engine.ValidateFailOn(failOn); err != nil {
+		t.Fatalf("ValidateFailOn(%q) returned error: %v", failOn, err)
+	}
+
+	// Drive the gate against a synthetic warning-severity finding (the real
+	// LLM001 rule is severity=warning, so this matches what a full scan
+	// would produce against the dirty CLAUDE.md fixture above).
+	res := &engine.Result{Findings: []findings.Finding{{
+		RuleID:   "LLM001",
+		Severity: rules.SevWarning,
+		Location: findings.Location{Kind: findings.LocFile, Path: "CLAUDE.md"},
+	}}}
+	if !engine.ExceedsThreshold(res, failOn) {
+		t.Errorf("ExceedsThreshold(warning) should trip on a warning finding when config sets fail_on: warning")
+	}
+
+	// And confirm the pre-fix behavior would have missed it: had the CLI
+	// flag default of "error" been preserved, the same warning finding
+	// would NOT exceed the threshold. Pinning this avoids a future
+	// "let's just default to error again" refactor silently re-breaking it.
+	if engine.ExceedsThreshold(res, "error") {
+		t.Errorf("sanity: warning finding must not exceed error threshold (pre-fix behavior)")
+	}
+}
+
+// TestFailOn_InvalidValueRejected is a regression for the second bug:
+// `--fail-on garbge` flowed into ExceedsThreshold where unknown strings
+// rank as 0, silently making the gate trip on every finding. The fix
+// validates the resolved value via engine.ValidateFailOn and surfaces the
+// error before os.Exit(1) is reached, so cobra's RunE error path returns it.
+func TestFailOn_InvalidValueRejected(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# clean\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRoot()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"scan", "--fail-on", "garbge", "--no-git", root})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for invalid --fail-on value")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "invalid --fail-on") {
+		t.Errorf("error %q missing prefix %q", msg, "invalid --fail-on")
+	}
+	if !strings.Contains(msg, "garbge") {
+		t.Errorf("error %q missing offending value %q", msg, "garbge")
 	}
 }

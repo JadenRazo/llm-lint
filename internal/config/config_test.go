@@ -26,8 +26,8 @@ func TestLoad_DefaultsWhenNoFile(t *testing.T) {
 	if cfg.HistoryDepth() != 1000 {
 		t.Errorf("history depth default: got %d want 1000", cfg.HistoryDepth())
 	}
-	if cfg.FailOnRank() != rules.SevError.Rank() {
-		t.Error("fail_on default should be error")
+	if cfg.FailOn != rules.SevError {
+		t.Errorf("fail_on default should be error, got %q", cfg.FailOn)
 	}
 }
 

@@ -240,5 +240,3 @@ func (c *Config) IsIgnored(relPath string) bool {
 }
 
 func (c *Config) HistoryDepth() int { return c.Scan.GitHistoryDepth }
-
-func (c *Config) FailOnRank() int { return c.FailOn.Rank() }
