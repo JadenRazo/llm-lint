@@ -52,7 +52,7 @@ func newScanCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.String("config", ".llmlint.yaml", "config file path (relative to repo root)")
-	f.String("format", "human", "output format: human|json|sarif")
+	f.String("format", "human", "output format: human|json|sarif|github (auto-detects to github when GITHUB_ACTIONS=true)")
 	f.String("output", "-", "output file or '-' for stdout")
 	f.String("fail-on", "error", "exit non-zero if any finding is at or above this severity (error|warning|info|none)")
 	f.Bool("no-git", false, "skip git history scan")
@@ -62,6 +62,11 @@ func newScanCmd() *cobra.Command {
 	f.Bool("staged-only", false, "scan files staged in the git index instead of the working tree (skips trailer/message rules)")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
+	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
+	f.String("pr-comment-mode", "sticky", "PR comment mode: sticky|append")
+	f.String("gh-token", "", "GitHub token (overrides GITHUB_TOKEN; never logged)")
+	f.String("gh-repo", "", "owner/repo (overrides GITHUB_REPOSITORY)")
+	f.Int("gh-pr", 0, "PR number (overrides auto-detect from event)")
 	f.BoolP("verbose", "v", false, "verbose output")
 	return cmd
 }
@@ -102,12 +107,27 @@ func runScan(cmd *cobra.Command, args []string) error {
 	}
 
 	format, _ := cmd.Flags().GetString("format")
+	formatChanged := cmd.Flags().Changed("format")
+	format = report.AutoDetectFormat(os.Getenv, formatChanged, format)
+
 	output, _ := cmd.Flags().GetString("output")
 	noColor, _ := cmd.Flags().GetBool("no-color")
+	prComment, _ := cmd.Flags().GetBool("pr-comment")
+	prMode, _ := cmd.Flags().GetString("pr-comment-mode")
+	ghToken, _ := cmd.Flags().GetString("gh-token")
+	ghRepo, _ := cmd.Flags().GetString("gh-repo")
+	ghPR, _ := cmd.Flags().GetInt("gh-pr")
 	rep, err := report.New(format, report.Options{
 		NoColor: noColor,
 		Output:  output,
 		Version: version,
+		GitHub: report.GitHubOptions{
+			PRComment:     prComment,
+			PRCommentMode: prMode,
+			Token:         ghToken,
+			Repo:          ghRepo,
+			PRNumber:      ghPR,
+		},
 	})
 	if err != nil {
 		return err

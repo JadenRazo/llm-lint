@@ -19,3 +19,10 @@ func SetHumanReporterFields(r *HumanReporter, w io.Writer, version string, noCol
 	r.opts.Version = version
 	r.opts.NoColor = noColor
 }
+
+func SetGitHubReporterFields(r *GitHubReporter, w io.Writer, env func(string) string) {
+	r.w = w
+	r.env = env
+	r.stderr = io.Discard
+}
+

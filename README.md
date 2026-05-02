@@ -85,7 +85,27 @@ Exit codes:
 
 ## CI integration
 
-### GitHub Actions
+### GitHub Actions (recommended: native annotations)
+
+In CI, `--format github` emits inline PR annotations and a Markdown step summary. It auto-activates when `GITHUB_ACTIONS=true` is set and `--format` is not explicitly chosen — so this just works:
+
+```yaml
+- run: llm-lint scan --fail-on error
+```
+
+For inline PR review comments and a sticky PR comment with the findings:
+
+```yaml
+- run: llm-lint scan --fail-on error --pr-comment
+  env:
+    GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+The sticky comment edits in place across runs (one comment per PR, not N). PR comment failures never fail the build — they're logged to stderr and skipped.
+
+Use `--format sarif` instead when you want findings to land in GitHub Code Scanning alerts:
+
+### GitHub Actions (legacy: SARIF upload)
 
 Drop this into `.github/workflows/llm-lint.yml`. Findings flow into the **Code Scanning** tab via SARIF. Node is preinstalled on `ubuntu-latest`, so `npx` is the shortest path:
 

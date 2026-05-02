@@ -20,6 +20,7 @@ type Options struct {
 	NoColor bool
 	Output  string
 	Version string
+	GitHub  GitHubOptions
 }
 
 type Reporter interface {
@@ -38,11 +39,13 @@ func New(format string, opts Options) (Reporter, error) {
 		return &JSONReporter{w: w, closer: closer, opts: opts}, nil
 	case FormatSARIF:
 		return &SARIFReporter{w: w, closer: closer, opts: opts}, nil
+	case FormatGitHub:
+		return newGitHubReporter(w, closer, opts), nil
 	default:
 		if closer != nil {
 			closer.Close()
 		}
-		return nil, fmt.Errorf("unknown format %q (want human|json|sarif)", format)
+		return nil, fmt.Errorf("unknown format %q (want human|json|sarif|github)", format)
 	}
 }
 
