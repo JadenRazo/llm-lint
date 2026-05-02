@@ -34,6 +34,7 @@ func newRoot() *cobra.Command {
 	}
 	root.AddCommand(newScanCmd())
 	root.AddCommand(newRulesCmd())
+	root.AddCommand(newHookCmd())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print version",

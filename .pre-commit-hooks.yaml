@@ -1,7 +1,7 @@
 - id: llm-lint
   name: llm-lint
-  description: Catch LLM artifacts before they're committed (no git-history scan in pre-commit)
-  entry: llm-lint scan --no-git --fail-on error
+  description: Catch LLM artifacts before they're committed (scans the staged index; no git-history scan)
+  entry: llm-lint scan --staged-only --no-git --fail-on error
   language: golang
   pass_filenames: false
   require_serial: false

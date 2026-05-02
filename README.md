@@ -129,6 +129,16 @@ llm-lint:
 
 ### pre-commit
 
+The fastest path is to let llm-lint write the hook for you:
+
+```bash
+llm-lint hook install
+```
+
+This autodetects: if you already have `.pre-commit-config.yaml`, it adds an entry there; otherwise it writes a managed shell hook to `.git/hooks/pre-commit`. Either way, commits are gated on `llm-lint scan --staged-only`, which scans the git index — typically <100ms even on large repos. Run `llm-lint hook status` to inspect, `llm-lint hook uninstall` to remove.
+
+If you prefer to manage `.pre-commit-config.yaml` yourself:
+
 ```yaml
 # .pre-commit-config.yaml
 repos:
@@ -138,7 +148,7 @@ repos:
       - id: llm-lint
 ```
 
-The pre-commit hook runs with `--no-git`, so only path/content rules fire (commit-trailer rules require an actual commit to inspect).
+The pre-commit hook runs in `--staged-only` mode, so only path/content rules fire on staged blobs. Trailer/message rules require an actual commit and are skipped (they apply at scan-time, not pre-commit-time).
 
 ### Docker
 
@@ -192,9 +202,13 @@ llm-lint scan --format sarif --output llm-lint.sarif
 llm-lint scan --fail-on warning
 llm-lint scan --no-git            # skip history scan
 llm-lint scan --since v1.0.0      # only commits newer than this ref
+llm-lint scan --staged-only       # scan the git index (pre-commit hook mode)
 llm-lint scan --include LLM015 --exclude LLM004
 llm-lint rules                    # list all rules with severity + category
 llm-lint rules show LLM003        # full description + remediation
+llm-lint hook install             # wire up a pre-commit hook (autodetect mode)
+llm-lint hook status              # show current hook installation state
+llm-lint hook uninstall           # remove the managed hook
 llm-lint version
 ```
 

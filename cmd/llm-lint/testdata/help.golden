@@ -6,6 +6,7 @@ Usage:
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
+  hook        Install, uninstall, or inspect the llm-lint pre-commit hook
   rules       List or describe rules
   scan        Scan a repository for LLM artifacts
   version     Print version
