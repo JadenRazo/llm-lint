@@ -18,15 +18,25 @@ Runtime requirements:
 
 To tweak timing, theme, or scene order, edit [`demo.tape`](demo.tape) and re-run. See the [vhs reference](https://github.com/charmbracelet/vhs#vhs-command-reference) for syntax.
 
-### `demo-short.gif` — LinkedIn / social cut (~27s)
+### `demo-short.gif` — LinkedIn / social cut (~12s, 239 frames)
 
-Trimmed from `demo.gif` — keeps Scenes 1 and 2 (artifacts land, scan surfaces findings) and drops the `rules show` drill-down. Regenerate with:
+Trimmed from `demo.gif` — keeps Scenes 1 and 2 (artifacts land, scan surfaces findings via `npx @jadenrazo/llm-lint scan`) and drops the `rules show` drill-down. Uses **non-uniform speedup** so the substance gets more screen time than the setup typing: setup region 5×, scan/findings region 1.5×. Fits LinkedIn's GIF cap (≤250 frames). Regenerate with:
 
 ```sh
-ffmpeg -y -i demo/demo.gif \
-  -vf "fps=25,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
-  -t 27.5 demo/demo-short.gif
+ffmpeg -y -i demo/demo.gif -filter_complex "\
+  [0:v]trim=0:16.5,setpts=(PTS-STARTPTS)/5[setup];\
+  [0:v]trim=16.5:29.5,setpts=(PTS-STARTPTS)/1.5[scan];\
+  [setup][scan]concat=n=2:v=1:a=0,fps=20,split[a][b];\
+  [a]palettegen=stats_mode=diff[p];\
+  [b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
+  demo/demo-short.gif
 ```
+
+Tuning knobs:
+
+- `trim=0:16.5` is the boundary between "git commit done" and "scan-intro comment starts" in `demo.gif`. `trim=…:29.5` is where the static findings frame ends and Scene 3 (`rules show`) begins. If you re-record the master, re-derive both with `ffmpeg -ss N -i demo/demo.gif -frames:v 1 frame.png` until the frame matches.
+- `setpts=(PTS-STARTPTS)/5` on the setup trims it from 16.5s → 3.3s. Drop to `/4` if the setup-typing feels too aggressive.
+- `setpts=(PTS-STARTPTS)/1.5` on the scan trims it from 13s → 8.7s, leaving the static "read findings" frame on screen for ~4.7s. `/1.4` would give ~5s of dwell but pushes the frame count over 250.
 
 ## `seed-demo-pr.sh` — GitHub PR with red CI checks
 

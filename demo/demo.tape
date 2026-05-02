@@ -16,14 +16,14 @@ Set Margin 20
 Set MarginFill "#0a0a0a"
 Set BorderRadius 8
 
-# --- Silent setup: build the binary, switch to a throwaway demo repo. ---
+# --- Silent setup: warm the npx cache, switch to a throwaway demo repo. ---
+# We pre-resolve the package so the visible `npx ...` invocation runs in
+# <1s instead of showing a download spinner mid-demo.
 Hide
-Type "PROJECT_ROOT=$(git rev-parse --show-toplevel) && cd $PROJECT_ROOT && go build -o bin/llm-lint ./cmd/llm-lint"
+Type "npx -y @jadenrazo/llm-lint@latest version >/dev/null 2>&1"
 Enter
 Sleep 3s
 Type "DEMO_DIR=$(mktemp -d -t llm-lint-demo.XXXX) && cd $DEMO_DIR"
-Enter
-Type 'export PATH="$PROJECT_ROOT/bin:$PATH"'
 Enter
 Type "git init -q -b main && git config user.email demo@example.com && git config user.name 'Demo Dev'"
 Enter
@@ -50,12 +50,12 @@ Sleep 1s
 Enter
 Sleep 1500ms
 
-# --- Scene 2: scan and surface findings. ---
-Type "# Catch them before they merge:"
+# --- Scene 2: scan and surface findings. One command, no install. ---
+Type "# Catch them before they merge — no install needed:"
 Sleep 1500ms
 Enter
 
-Type "llm-lint scan"
+Type "npx @jadenrazo/llm-lint scan"
 Sleep 300ms
 Enter
 Sleep 7s
@@ -65,7 +65,7 @@ Type "# Every finding ships with concrete remediation:"
 Sleep 1500ms
 Enter
 
-Type "llm-lint rules show LLM003"
+Type "npx @jadenrazo/llm-lint rules show LLM003"
 Sleep 300ms
 Enter
 Sleep 6s
