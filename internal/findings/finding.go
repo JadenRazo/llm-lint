@@ -31,6 +31,12 @@ type Finding struct {
 	Description string         `json:"description"`
 	Remediation string         `json:"remediation"`
 	Location    Location       `json:"location"`
+	// Baselined is true when this finding matched an entry in
+	// .llmlint-baseline.yaml. Baselined findings are still reported
+	// (so the team sees what's in the baseline) but are excluded from
+	// the --fail-on threshold. omitempty keeps existing JSON/SARIF
+	// goldens byte-stable for runs without a baseline.
+	Baselined bool `json:"baselined,omitempty"`
 }
 
 func FromMatch(m rules.Match) Finding {

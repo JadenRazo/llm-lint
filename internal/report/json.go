@@ -19,6 +19,14 @@ type jsonOutput struct {
 	Scanned  scannedInfo        `json:"scanned"`
 	Findings []findings.Finding `json:"findings"`
 	Summary  findings.Summary   `json:"summary"`
+	Baseline *baselineInfo      `json:"baseline,omitempty"`
+}
+
+type baselineInfo struct {
+	Path    string `json:"path"`
+	Loaded  bool   `json:"loaded"`
+	Matched int    `json:"matched"`
+	Stale   int    `json:"stale"`
 }
 
 type toolInfo struct {
@@ -54,6 +62,14 @@ func (r *JSONReporter) Write(res *engine.Result) error {
 	}
 	if out.Findings == nil {
 		out.Findings = []findings.Finding{}
+	}
+	if res.BaselineLoaded || res.BaselinedCount > 0 || res.StaleBaselineCount > 0 {
+		out.Baseline = &baselineInfo{
+			Path:    res.BaselinePath,
+			Loaded:  res.BaselineLoaded,
+			Matched: res.BaselinedCount,
+			Stale:   res.StaleBaselineCount,
+		}
 	}
 	enc := json.NewEncoder(r.w)
 	enc.SetIndent("", "  ")

@@ -9,9 +9,12 @@ import (
 
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
+	"sigs.k8s.io/yaml"
 
+	"github.com/JadenRazo/llm-lint/internal/baseline"
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/engine"
+	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
@@ -157,6 +160,107 @@ func TestEngine_E2E_StagedOnly_SkipsTrailerRules(t *testing.T) {
 	if got["LLM003"] != 0 {
 		t.Errorf("staged-only must skip trailer rules; got LLM003 count %d (all=%v)", got["LLM003"], got)
 	}
+}
+
+func TestEngine_E2E_Baseline_NewFindingFails(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte("context\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".llmlint.yaml"), []byte("version: 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(".llmlint.yaml", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := engine.New(rules.DefaultRegistry(), cfg).Run(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Findings) != 1 {
+		t.Fatalf("expected 1 finding (CLAUDE.md); got %d", len(res.Findings))
+	}
+
+	// Snapshot the finding into a baseline file.
+	doc := &baselineDoc{
+		Version:     1,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+		GeneratedBy: "test",
+		Total:       1,
+		Entries: []baselineEntry{
+			{Rule: res.Findings[0].RuleID, Fingerprint: fingerprintFor(res.Findings[0]), Location: "file", Path: "CLAUDE.md"},
+		},
+	}
+	writeBaseline(t, filepath.Join(root, ".llmlint-baseline.yaml"), doc)
+
+	// Re-scan: the existing finding should be baselined, threshold not exceeded.
+	cfg2, err := config.Load(".llmlint.yaml", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res2, err := engine.New(rules.DefaultRegistry(), cfg2).Run(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res2.BaselineLoaded {
+		t.Errorf("baseline file should be loaded")
+	}
+	if res2.BaselinedCount != 1 {
+		t.Errorf("baselined: got %d want 1", res2.BaselinedCount)
+	}
+	if engine.ExceedsThreshold(res2, "error") {
+		t.Errorf("threshold should not be exceeded when only finding is baselined")
+	}
+
+	// Add a new (un-baselined) finding: a .cursorrules file.
+	if err := os.WriteFile(filepath.Join(root, ".cursorrules"), []byte("rule\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg3, _ := config.Load(".llmlint.yaml", root)
+	res3, err := engine.New(rules.DefaultRegistry(), cfg3).Run(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !engine.ExceedsThreshold(res3, "error") {
+		t.Errorf("new finding (.cursorrules) should fail the threshold even with baseline applied")
+	}
+}
+
+// baselineDoc / baselineEntry / writeBaseline / fingerprintFor are a
+// minimal local copy to avoid an import cycle (engine_test → baseline →
+// findings; engine already imports baseline).
+type baselineDoc struct {
+	Version     int             `json:"version"`
+	GeneratedAt string          `json:"generated_at"`
+	GeneratedBy string          `json:"generated_by"`
+	Total       int             `json:"total"`
+	Entries     []baselineEntry `json:"entries"`
+}
+
+type baselineEntry struct {
+	Rule        string `json:"rule"`
+	Fingerprint string `json:"fingerprint"`
+	Location    string `json:"location"`
+	Path        string `json:"path,omitempty"`
+}
+
+func writeBaseline(t *testing.T, path string, doc *baselineDoc) {
+	t.Helper()
+	body, err := yaml.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func fingerprintFor(f findings.Finding) string {
+	// Mirrors baseline.Fingerprint for path findings without the import cycle.
+	return baseline.Fingerprint(f)
 }
 
 func TestEngine_E2E_CleanRepo_NoFindings(t *testing.T) {

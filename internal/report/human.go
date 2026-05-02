@@ -37,6 +37,9 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 	if res.GitSkipped && res.GitSkippedNote != "" {
 		fmt.Fprintln(r.w, c.dim("note: git scan skipped: "+res.GitSkippedNote))
 	}
+	if res.BaselineLoaded {
+		fmt.Fprintln(r.w, c.dim(fmt.Sprintf("baseline: %s (%d matched)", res.BaselinePath, res.BaselinedCount)))
+	}
 	fmt.Fprintln(r.w)
 
 	if len(res.Findings) == 0 {
@@ -50,7 +53,11 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 		glyph, sevText := severityGlyph(first.Severity, c)
 		fmt.Fprintf(r.w, "%s %s  %-7s  %s\n", glyph, c.bold(first.RuleID), sevText, first.Title)
 		for _, f := range g {
-			fmt.Fprintln(r.w, "   "+c.dim("└─ ")+formatLocation(f))
+			line := "   " + c.dim("└─ ") + formatLocation(f)
+			if f.Baselined {
+				line += " " + c.dim("(baselined)")
+			}
+			fmt.Fprintln(r.w, line)
 		}
 		if first.Remediation != "" {
 			fmt.Fprintln(r.w, c.dim(indent(first.Remediation, "      ")))
@@ -62,8 +69,23 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 	total := s.Error + s.Warning + s.Info
 	footer := fmt.Sprintf("%d findings  (%d errors, %d warnings, %d info)",
 		total, s.Error, s.Warning, s.Info)
+	if res.BaselinedCount > 0 {
+		footer += fmt.Sprintf("; %d baselined", res.BaselinedCount)
+	}
 	fmt.Fprintln(r.w, c.bold(footer))
+	if res.StaleBaselineCount > 0 {
+		fmt.Fprintln(r.w, c.warn(fmt.Sprintf(
+			"note: %d baseline entr%s no longer match — run `llm-lint baseline prune` to clean up",
+			res.StaleBaselineCount, plural(res.StaleBaselineCount, "y", "ies"))))
+	}
 	return nil
+}
+
+func plural(n int, singular, plural string) string {
+	if n == 1 {
+		return singular
+	}
+	return plural
 }
 
 func groupByRule(fs []findings.Finding) [][]findings.Finding {

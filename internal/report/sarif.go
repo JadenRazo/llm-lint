@@ -44,9 +44,14 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 	}
 
 	for _, f := range res.Findings {
+		baselineState := "new"
+		if f.Baselined {
+			baselineState = "unchanged"
+		}
 		result := sarif.NewRuleResult(f.RuleID).
 			WithLevel(sarifLevel(f.Severity)).
-			WithMessage(sarif.NewTextMessage(f.Title))
+			WithMessage(sarif.NewTextMessage(f.Title)).
+			WithBaselineState(baselineState)
 
 		if f.Location.Kind == findings.LocFile && f.Location.Path != "" {
 			region := sarif.NewSimpleRegion(maxInt(f.Location.Line, 1), maxInt(f.Location.Line, 1))

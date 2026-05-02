@@ -4,6 +4,7 @@ Usage:
   llm-lint [command]
 
 Available Commands:
+  baseline    Manage .llmlint-baseline.yaml — accept findings now, gate CI on new ones
   completion  Generate the autocompletion script for the specified shell
   help        Help about any command
   hook        Install, uninstall, or inspect the llm-lint pre-commit hook

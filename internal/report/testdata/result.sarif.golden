@@ -108,7 +108,8 @@
                 }
               }
             }
-          ]
+          ],
+          "baselineState": "new"
         },
         {
           "properties": {
@@ -130,7 +131,8 @@
                 }
               }
             }
-          ]
+          ],
+          "baselineState": "new"
         },
         {
           "properties": {
@@ -152,7 +154,8 @@
                 }
               }
             }
-          ]
+          ],
+          "baselineState": "new"
         },
         {
           "ruleId": "LLM013",
@@ -173,7 +176,8 @@
                 }
               }
             }
-          ]
+          ],
+          "baselineState": "new"
         }
       ]
     }

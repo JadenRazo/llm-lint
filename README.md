@@ -176,6 +176,27 @@ The pre-commit hook runs in `--staged-only` mode, so only path/content rules fir
 docker run --rm -v "$PWD":/workspace ghcr.io/jadenrazo/llm-lint:latest scan
 ```
 
+## Baselining existing findings
+
+Adopting llm-lint on a repo with historical artifacts is painful if CI fails on day one. The baseline file accepts current findings without losing visibility — they're still reported, marked `(baselined)`, but excluded from the `--fail-on` exit-code gate.
+
+```bash
+llm-lint baseline create        # snapshots .llmlint-baseline.yaml from current findings
+git add .llmlint-baseline.yaml  # commit it; the file is meant to be in version control
+```
+
+After this, `llm-lint scan` ignores baselined findings for CI gating but still flags anything new. As the team fixes baselined findings:
+
+```bash
+llm-lint baseline status        # see how many are baselined / new / stale
+llm-lint baseline prune         # drop entries that no longer match any finding
+llm-lint baseline update        # re-snapshot (alias for `create --force`)
+```
+
+The goal is to shrink the baseline toward zero. Stale entries (an entry whose finding has been fixed) print a warning by default; set `baseline.stale_action: fail` in `.llmlint.yaml` to enforce cleanup in CI.
+
+Fingerprints are stable across line shifts (for content findings) and severity changes (severity is config, not finding identity). Path renames invalidate path findings — that's intentional, since a rename is a deliberate change. SARIF output emits `baselineState: unchanged` for baselined findings, so GitHub Code Scanning treats them as suppressed-from-PR-summary natively.
+
 ## Configuration
 
 Drop a `.llmlint.yaml` at your repo root. Every key is optional — defaults work for most projects.
@@ -229,6 +250,9 @@ llm-lint rules show LLM003        # full description + remediation
 llm-lint hook install             # wire up a pre-commit hook (autodetect mode)
 llm-lint hook status              # show current hook installation state
 llm-lint hook uninstall           # remove the managed hook
+llm-lint baseline create          # snapshot current findings into .llmlint-baseline.yaml
+llm-lint baseline status          # show matched / new / stale counts
+llm-lint baseline prune           # drop stale baseline entries
 llm-lint version
 ```
 

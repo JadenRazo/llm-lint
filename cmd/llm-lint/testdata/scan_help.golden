@@ -4,6 +4,8 @@ Usage:
   llm-lint scan [path] [flags]
 
 Flags:
+      --baseline string          baseline file path (default: .llmlint-baseline.yaml if present)
+      --baseline-stale-fail      exit non-zero if the baseline has stale entries
       --config string            config file path (relative to repo root) (default ".llmlint.yaml")
       --exclude strings          disable rule IDs (repeatable)
       --fail-on string           exit non-zero if any finding is at or above this severity (error|warning|info|none) (default "error")
@@ -13,6 +15,7 @@ Flags:
       --gh-token string          GitHub token (overrides GITHUB_TOKEN; never logged)
   -h, --help                     help for scan
       --include strings          force-enable rule IDs (repeatable)
+      --no-baseline              ignore baseline file even if present
       --no-color                 disable ANSI color
       --no-git                   skip git history scan
       --no-progress              disable the live progress line on stderr

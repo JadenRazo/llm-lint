@@ -37,5 +37,11 @@ scan:
   git_history: true
   git_history_depth: 1000   # 0 = full history
 
+# Baselining: snapshot accepted findings, gate CI on new ones.
+# baseline:
+#   path: .llmlint-baseline.yaml   # default
+#   stale_action: warn             # warn | fail | ignore  (warn by default)
+#   include_snippets: true         # set false to keep match text out of VCS
+
 # Exit-code threshold
 fail_on: error              # error | warning | info | none

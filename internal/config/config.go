@@ -23,20 +23,30 @@ type ScanConfig struct {
 	GitHistoryDepth int   `json:"git_history_depth,omitempty"`
 }
 
+type BaselineConfig struct {
+	Path            string `json:"path,omitempty"`
+	StaleAction     string `json:"stale_action,omitempty"` // warn | fail | ignore
+	IncludeSnippets *bool  `json:"include_snippets,omitempty"`
+}
+
 type Config struct {
 	Version    int                     `json:"version,omitempty"`
 	Categories []rules.Category        `json:"categories,omitempty"`
 	Rules      map[string]RuleOverride `json:"rules,omitempty"`
 	Ignore     []string                `json:"ignore,omitempty"`
 	Scan       ScanConfig              `json:"scan,omitempty"`
+	Baseline   BaselineConfig          `json:"baseline,omitempty"`
 	FailOn     rules.Severity          `json:"fail_on,omitempty"`
 
-	includeRules map[string]bool
-	excludeRules map[string]bool
-	noGit        bool
-	since        string
-	stagedOnly   bool
-	root         string
+	includeRules      map[string]bool
+	excludeRules      map[string]bool
+	noGit             bool
+	since             string
+	stagedOnly        bool
+	baselinePath      string
+	noBaseline        bool
+	baselineStaleFail bool
+	root              string
 }
 
 func defaultConfig() *Config {
@@ -94,6 +104,13 @@ func Load(configPath, root string) (*Config, error) {
 	if cfg.Scan.GitHistoryDepth == 0 {
 		cfg.Scan.GitHistoryDepth = 1000
 	}
+	if cfg.Baseline.StaleAction != "" {
+		switch cfg.Baseline.StaleAction {
+		case "warn", "fail", "ignore":
+		default:
+			return nil, fmt.Errorf("invalid baseline.stale_action %q (want warn|fail|ignore)", cfg.Baseline.StaleAction)
+		}
+	}
 	return cfg, nil
 }
 
@@ -101,11 +118,14 @@ func Load(configPath, root string) (*Config, error) {
 // config file. Future flags add new fields here so we don't churn the
 // ApplyCLIOverrides signature on every CLI addition.
 type CLIOverrides struct {
-	Includes   []string
-	Excludes   []string
-	NoGit      bool
-	Since      string
-	StagedOnly bool
+	Includes          []string
+	Excludes          []string
+	NoGit             bool
+	Since             string
+	StagedOnly        bool
+	BaselinePath      string
+	NoBaseline        bool
+	BaselineStaleFail bool
 }
 
 func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
@@ -125,12 +145,41 @@ func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
 	c.noGit = o.NoGit
 	c.since = o.Since
 	c.stagedOnly = o.StagedOnly
+	c.baselinePath = o.BaselinePath
+	c.noBaseline = o.NoBaseline
+	c.baselineStaleFail = o.BaselineStaleFail
 	return nil
 }
 
 func (c *Config) Since() string { return c.since }
 
 func (c *Config) StagedOnly() bool { return c.stagedOnly }
+
+func (c *Config) BaselineEnabled() bool { return !c.noBaseline }
+
+func (c *Config) BaselinePath() string {
+	if c.baselinePath != "" {
+		return c.baselinePath
+	}
+	return c.Baseline.Path
+}
+
+func (c *Config) BaselineStaleAction() string {
+	if c.baselineStaleFail {
+		return "fail"
+	}
+	if c.Baseline.StaleAction != "" {
+		return c.Baseline.StaleAction
+	}
+	return "warn"
+}
+
+func (c *Config) BaselineIncludeSnippets() bool {
+	if c.Baseline.IncludeSnippets != nil {
+		return *c.Baseline.IncludeSnippets
+	}
+	return true
+}
 
 func (c *Config) GitEnabled() bool {
 	if c.noGit {

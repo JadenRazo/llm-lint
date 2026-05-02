@@ -35,6 +35,7 @@ func newRoot() *cobra.Command {
 	root.AddCommand(newScanCmd())
 	root.AddCommand(newRulesCmd())
 	root.AddCommand(newHookCmd())
+	root.AddCommand(newBaselineCmd())
 	root.AddCommand(&cobra.Command{
 		Use:   "version",
 		Short: "Print version",
@@ -60,6 +61,9 @@ func newScanCmd() *cobra.Command {
 	f.Bool("no-progress", false, "disable the live progress line on stderr")
 	f.String("since", "", "only scan commits since this git ref/sha")
 	f.Bool("staged-only", false, "scan files staged in the git index instead of the working tree (skips trailer/message rules)")
+	f.String("baseline", "", "baseline file path (default: .llmlint-baseline.yaml if present)")
+	f.Bool("no-baseline", false, "ignore baseline file even if present")
+	f.Bool("baseline-stale-fail", false, "exit non-zero if the baseline has stale entries")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
@@ -87,12 +91,18 @@ func runScan(cmd *cobra.Command, args []string) error {
 	noGit, _ := cmd.Flags().GetBool("no-git")
 	since, _ := cmd.Flags().GetString("since")
 	stagedOnly, _ := cmd.Flags().GetBool("staged-only")
+	baselinePath, _ := cmd.Flags().GetString("baseline")
+	noBaseline, _ := cmd.Flags().GetBool("no-baseline")
+	baselineStaleFail, _ := cmd.Flags().GetBool("baseline-stale-fail")
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes:   include,
-		Excludes:   exclude,
-		NoGit:      noGit,
-		Since:      since,
-		StagedOnly: stagedOnly,
+		Includes:          include,
+		Excludes:          exclude,
+		NoGit:             noGit,
+		Since:             since,
+		StagedOnly:        stagedOnly,
+		BaselinePath:      baselinePath,
+		NoBaseline:        noBaseline,
+		BaselineStaleFail: baselineStaleFail,
 	}); err != nil {
 		return err
 	}
@@ -138,6 +148,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 
 	failOn, _ := cmd.Flags().GetString("fail-on")
 	if engine.ExceedsThreshold(res, failOn) {
+		os.Exit(1)
+	}
+	if cfg.BaselineStaleAction() == "fail" && res.StaleBaselineCount > 0 {
 		os.Exit(1)
 	}
 	return nil

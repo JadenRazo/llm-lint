@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/JadenRazo/llm-lint/internal/baseline"
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/gitscan"
@@ -13,14 +14,18 @@ import (
 )
 
 type Result struct {
-	Findings        []findings.Finding `json:"findings"`
-	Summary         findings.Summary   `json:"summary"`
-	FilesScanned    int64              `json:"files_scanned"`
-	CommitsScanned  int                `json:"commits_scanned"`
-	DurationMS      int64              `json:"duration_ms"`
-	GitShallow      bool               `json:"git_shallow,omitempty"`
-	GitSkipped      bool               `json:"git_skipped,omitempty"`
-	GitSkippedNote  string             `json:"git_skipped_note,omitempty"`
+	Findings           []findings.Finding `json:"findings"`
+	Summary            findings.Summary   `json:"summary"`
+	FilesScanned       int64              `json:"files_scanned"`
+	CommitsScanned     int                `json:"commits_scanned"`
+	DurationMS         int64              `json:"duration_ms"`
+	GitShallow         bool               `json:"git_shallow,omitempty"`
+	GitSkipped         bool               `json:"git_skipped,omitempty"`
+	GitSkippedNote     string             `json:"git_skipped_note,omitempty"`
+	BaselinePath       string             `json:"baseline_path,omitempty"`
+	BaselineLoaded     bool               `json:"baseline_loaded,omitempty"`
+	BaselinedCount     int                `json:"baselined_count,omitempty"`
+	StaleBaselineCount int                `json:"stale_baseline_count,omitempty"`
 }
 
 type Engine struct {
@@ -93,6 +98,22 @@ func (e *Engine) Run(root string) (*Result, error) {
 	}
 
 	findings.Sort(res.Findings)
+
+	if e.cfg.BaselineEnabled() {
+		bp := baseline.ResolvePath(e.cfg.BaselinePath(), root)
+		res.BaselinePath = bp
+		doc, err := baseline.Load(bp)
+		if err != nil {
+			return nil, fmt.Errorf("baseline load: %w", err)
+		}
+		if doc != nil {
+			res.BaselineLoaded = true
+			stats := baseline.Apply(res.Findings, doc)
+			res.BaselinedCount = stats.Matched
+			res.StaleBaselineCount = len(stats.Stale)
+		}
+	}
+
 	res.Summary = findings.Summarize(res.Findings)
 	res.DurationMS = time.Since(start).Milliseconds()
 	return res, nil
@@ -104,6 +125,9 @@ func ExceedsThreshold(r *Result, failOn string) bool {
 		return false
 	}
 	for _, f := range r.Findings {
+		if f.Baselined {
+			continue
+		}
 		if f.Severity.Rank() >= threshold {
 			return true
 		}
