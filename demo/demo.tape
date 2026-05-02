@@ -54,7 +54,7 @@ Enter
 Type "npx @jadenrazo/llm-lint scan"
 Sleep 300ms
 Enter
-Sleep 6s
+Sleep 3s
 
 # --- Scene 3: drill into a rule's full remediation. ---
 Type "# Every finding ships with concrete remediation:"

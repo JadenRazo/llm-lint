@@ -18,14 +18,14 @@ Runtime requirements:
 
 To tweak timing, theme, or scene order, edit [`demo.tape`](demo.tape) and re-run. See the [vhs reference](https://github.com/charmbracelet/vhs#vhs-command-reference) for syntax.
 
-### `demo-short.gif` — LinkedIn / social cut (~7.6s, 152 frames)
+### `demo-short.gif` — LinkedIn / social cut (~6.1s, 122 frames)
 
-Trimmed from `demo.gif` — keeps Scenes 1 and 2 (artifacts land, scan surfaces findings via `npx @jadenrazo/llm-lint scan`) and drops the `rules show` drill-down. Uses **non-uniform speedup** so the substance gets more screen time than the setup typing: setup region 6×, scan/findings region 1.4×. Fits LinkedIn's tightened GIF cap. Regenerate with:
+Trimmed from `demo.gif` — keeps Scenes 1 and 2 (artifacts land, scan surfaces findings via `npx @jadenrazo/llm-lint scan`) and drops the `rules show` drill-down. Uses **non-uniform speedup** so the substance gets more screen time than the setup typing: setup region 6×, scan/findings region 1.2×. Fits LinkedIn's tightened GIF cap. Regenerate with:
 
 ```sh
 ffmpeg -y -i demo/demo.gif -filter_complex "\
   [0:v]trim=0:9.0,setpts=(PTS-STARTPTS)/6[setup];\
-  [0:v]trim=9.0:17.5,setpts=(PTS-STARTPTS)/1.4[scan];\
+  [0:v]trim=9.0:14.5,setpts=(PTS-STARTPTS)/1.2[scan];\
   [setup][scan]concat=n=2:v=1:a=0,fps=20,split[a][b];\
   [a]palettegen=stats_mode=diff[p];\
   [b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" \
@@ -34,11 +34,11 @@ ffmpeg -y -i demo/demo.gif -filter_complex "\
 
 Tuning knobs:
 
-- `trim=0:9.0` is the boundary between "git commit done" and "`# No install needed:` comment starts" in `demo.gif`. `trim=…:17.5` is where the static findings frame ends and Scene 3 (`rules show`) begins. If you re-record the master, re-derive both with `ffmpeg -ss N -i demo/demo.gif -frames:v 1 frame.png` until the frame matches.
-- `setpts=(PTS-STARTPTS)/6` on the setup trims it from 9.0s → 1.5s. Drop to `/5` if the setup-typing feels too aggressive.
-- `setpts=(PTS-STARTPTS)/1.4` on the scan trims it from 8.5s → 6.1s, leaving the static "read findings" frame on screen for ~3.5s. `/1.2` would give ~4.5s of dwell but adds ~30 frames.
+- `trim=0:9.0` is the boundary between "git commit done" and "`# No install needed:` comment starts" in `demo.gif`. `trim=…:14.5` is where the static findings frame ends and Scene 3 (`rules show`) begins. If you re-record the master, re-derive both with `ffmpeg -ss N -i demo/demo.gif -frames:v 1 frame.png` until the frame matches.
+- `setpts=(PTS-STARTPTS)/6` on the setup trims it from 9.0s → 1.5s.
+- `setpts=(PTS-STARTPTS)/1.2` on the scan trims it from 5.5s → 4.6s, leaving the static "read findings" frame on screen for ~1.6s — tight, but readable on loop.
 
-Note: the master `demo.tape` itself was tightened to make this possible — typing speed dropped to 30ms/char, the Scene 1 narration comment was removed entirely (the visual story carries it), and the Scene 2 comment was shortened to `# No install needed:`. Re-introducing narration in the tape would put this back over the LinkedIn cap.
+Note: the master `demo.tape` itself was tightened to make this possible — typing speed dropped to 30ms/char, the Scene 1 narration comment was removed entirely (the visual story carries it), the Scene 2 comment was shortened to `# No install needed:`, and the post-scan `Sleep` was halved from 6s → 3s. Re-introducing narration or longer pauses in the tape would put this back over the LinkedIn cap.
 
 ## `seed-demo-pr.sh` — GitHub PR with red CI checks
 
