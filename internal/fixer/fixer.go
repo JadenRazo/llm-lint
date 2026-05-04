@@ -24,6 +24,7 @@ const (
 
 type Options struct {
 	GitHistoryMode string
+	Preview        bool
 }
 
 type Summary struct {
@@ -95,7 +96,7 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 		}
 	}
 
-	commitMessages, commitLinesRemoved, unfixable, err := fixCommitMessages(absRoot, commitTargets, mode)
+	commitMessages, commitLinesRemoved, unfixable, err := fixCommitMessages(absRoot, commitTargets, mode, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
@@ -103,14 +104,14 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 	summary.CommitLinesRemoved = commitLinesRemoved
 	summary.Unfixable += unfixable
 
-	changedContent, removed, err := removeContentLines(absRoot, contentTargets)
+	changedContent, removed, err := removeContentLines(absRoot, contentTargets, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
 	summary.FilesChanged += changedContent
 	summary.LinesRemoved += removed
 
-	added, err := appendGitignore(absRoot, ignorePatterns)
+	added, err := appendGitignore(absRoot, ignorePatterns, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
@@ -119,7 +120,7 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 		summary.GitignoreAdded = added
 	}
 
-	fixed, err := untrack(absRoot, untrackPaths)
+	fixed, err := untrack(absRoot, untrackPaths, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
@@ -128,7 +129,7 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 	return summary, nil
 }
 
-func removeContentLines(root string, targets map[string]map[int][]rules.Rule) (int, int, error) {
+func removeContentLines(root string, targets map[string]map[int][]rules.Rule, preview bool) (int, int, error) {
 	var changedFiles, removedLines int
 	for rel, byLine := range targets {
 		if !safeRel(rel) {
@@ -152,6 +153,10 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule) (i
 			out = append(out, line)
 		}
 		if changed {
+			if preview {
+				changedFiles++
+				continue
+			}
 			if err := os.WriteFile(path, bytes.Join(out, nil), 0o644); err != nil {
 				return changedFiles, removedLines, err
 			}
@@ -161,7 +166,7 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule) (i
 	return changedFiles, removedLines, nil
 }
 
-func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHistoryMode) (int, int, int, error) {
+func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHistoryMode, preview bool) (int, int, int, error) {
 	if len(targets) == 0 {
 		return 0, 0, 0, nil
 	}
@@ -172,7 +177,7 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 		return 0, 0, lenCommitTargets(targets), nil
 	}
 	if mode == GitHistoryScanned {
-		return rewriteScannedCommitMessages(root, targets)
+		return rewriteScannedCommitMessages(root, targets, preview)
 	}
 
 	head, err := gitOutput(root, "rev-parse", "HEAD")
@@ -209,6 +214,9 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 	if err != nil {
 		return 0, 0, unfixable, err
 	}
+	if preview {
+		return 1, removed, unfixable, nil
+	}
 	newHead, err := createCommit(root, meta, cleaned, strings.Fields(meta.Parents))
 	if err != nil {
 		return 0, 0, unfixable, err
@@ -219,7 +227,7 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 	return 1, removed, unfixable, nil
 }
 
-func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule) (int, int, int, error) {
+func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, preview bool) (int, int, int, error) {
 	oldHead, err := gitOutput(root, "rev-parse", "HEAD")
 	if err != nil {
 		return 0, 0, lenCommitTargets(targets), nil
@@ -273,9 +281,13 @@ func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule) 
 			continue
 		}
 
-		newSHA, err := createCommit(root, meta, cleaned, newParents)
-		if err != nil {
-			return changedCommits, removedLines, unfixable, err
+		newSHA := sha
+		if !preview {
+			var err error
+			newSHA, err = createCommit(root, meta, cleaned, newParents)
+			if err != nil {
+				return changedCommits, removedLines, unfixable, err
+			}
 		}
 		rewrite[sha] = newSHA
 		if removed > 0 {
@@ -288,7 +300,7 @@ func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule) 
 	if newHead == "" {
 		return changedCommits, removedLines, lenCommitTargets(targets), nil
 	}
-	if newHead != oldHead {
+	if newHead != oldHead && !preview {
 		if err := updateHead(root, oldHead, newHead); err != nil {
 			return changedCommits, removedLines, unfixable, err
 		}
@@ -480,7 +492,7 @@ func splitLines(data []byte) [][]byte {
 	return raw
 }
 
-func appendGitignore(root string, patterns map[string]struct{}) (int, error) {
+func appendGitignore(root string, patterns map[string]struct{}, preview bool) (int, error) {
 	if len(patterns) == 0 {
 		return 0, nil
 	}
@@ -504,6 +516,9 @@ func appendGitignore(root string, patterns map[string]struct{}) (int, error) {
 	if len(missing) == 0 {
 		return 0, nil
 	}
+	if preview {
+		return len(missing), nil
+	}
 
 	var buf bytes.Buffer
 	buf.Write(data)
@@ -520,7 +535,7 @@ func appendGitignore(root string, patterns map[string]struct{}) (int, error) {
 	return len(missing), nil
 }
 
-func untrack(root string, paths map[string]struct{}) (int, error) {
+func untrack(root string, paths map[string]struct{}, preview bool) (int, error) {
 	if len(paths) == 0 {
 		return 0, nil
 	}
@@ -540,6 +555,10 @@ func untrack(root string, paths map[string]struct{}) (int, error) {
 	for _, p := range ordered {
 		check := exec.Command("git", gitArgs(root, "ls-files", "--error-unmatch", "--", p)...)
 		if err := check.Run(); err != nil {
+			continue
+		}
+		if preview {
+			fixed++
 			continue
 		}
 		cmd := exec.Command("git", gitArgs(root, "rm", "--cached", "--ignore-unmatch", "--", p)...)

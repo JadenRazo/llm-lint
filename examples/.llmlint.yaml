@@ -37,7 +37,8 @@ scan:
   git_history: true
   git_history_depth: 1000   # 0 = full history
 
-# Auto-fix policy used by `llm-lint scan --fix`.
+# Auto-fix policy used by `llm-lint scan --fix` and previewed by
+# `llm-lint scan --fix-preview`.
 # Use "scanned" only when you intentionally want to rewrite matching commits
 # in the scanned HEAD history.
 # fix:

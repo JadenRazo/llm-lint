@@ -298,7 +298,7 @@ func TestFix_RejectsStagedOnly(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for --fix with --staged-only")
 	}
-	if !strings.Contains(err.Error(), "--fix cannot be used with --staged-only") {
+	if !strings.Contains(err.Error(), "--fix/--fix-preview cannot be used with --staged-only") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -318,7 +318,27 @@ func TestFixGitHistory_RequiresFix(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for --fix-git-history without --fix")
 	}
-	if !strings.Contains(err.Error(), "--fix-git-history requires --fix") {
+	if !strings.Contains(err.Error(), "--fix-git-history requires --fix or --fix-preview") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestFixAndPreview_MutuallyExclusive(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# clean\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRoot()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"scan", "--fix", "--fix-preview", "--no-git", root})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for --fix with --fix-preview")
+	}
+	if !strings.Contains(err.Error(), "--fix and --fix-preview cannot be used together") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

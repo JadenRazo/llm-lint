@@ -93,9 +93,16 @@ llm-lint scan --fix
 
 Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and strips AI trailers/markers from the latest commit message.
 
+Preview the same plan without changing files, the git index, or history:
+
+```bash
+llm-lint scan --fix-preview
+```
+
 Commit-message cleanup is configurable:
 
 ```bash
+llm-lint scan --fix-preview --fix-git-history scanned # preview broad history cleanup
 llm-lint scan --fix --fix-git-history latest   # default: only HEAD
 llm-lint scan --fix --fix-git-history scanned  # rewrite all matching scanned commits on HEAD history
 llm-lint scan --fix --fix-git-history none     # leave commit findings as manual
@@ -268,6 +275,7 @@ llm-lint scan --fail-on warning
 llm-lint scan --no-git            # skip history scan
 llm-lint scan --since v1.0.0      # only commits newer than this ref
 llm-lint scan --staged-only       # scan the git index (pre-commit hook mode)
+llm-lint scan --fix-preview       # preview autofix changes without writing
 llm-lint scan --fix --fix-git-history scanned
 llm-lint scan --include LLM015 --exclude LLM004
 llm-lint rules                    # list all rules with severity + category

@@ -47,6 +47,37 @@ func TestApply_RemovesContentLines(t *testing.T) {
 	}
 }
 
+func TestApply_PreviewDoesNotChangeContentLines(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "src")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(src, "handler.py")
+	body := "def f():\n    # I'm sorry, but I can't help with that.\n    return 1\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res := scan(t, root)
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		Preview: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.LinesRemoved != 1 || summary.FilesChanged != 1 {
+		t.Fatalf("summary = %+v, want preview of one line removed in one file", summary)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != body {
+		t.Fatalf("preview changed file:\n%s", got)
+	}
+}
+
 func TestApply_IgnoresAndUntracksPathFindings(t *testing.T) {
 	root := t.TempDir()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -85,6 +116,39 @@ func TestApply_IgnoresAndUntracksPathFindings(t *testing.T) {
 	}
 }
 
+func TestApply_PreviewDoesNotUntrackPathFindings(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "CLAUDE.md"), []byte("context\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "CLAUDE.md")
+
+	res := scan(t, root)
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		Preview: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.GitignoreAdded != 1 || summary.IndexEntriesFixed != 1 {
+		t.Fatalf("summary = %+v, want preview of one gitignore entry and one untracked index entry", summary)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".gitignore")); !os.IsNotExist(err) {
+		t.Fatalf("preview should not create .gitignore, err=%v", err)
+	}
+	out := runGit(t, root, "ls-files")
+	if !strings.Contains(out, "CLAUDE.md") {
+		t.Fatalf("preview should leave CLAUDE.md in the index, got:\n%s", out)
+	}
+}
+
 func TestApply_CleansHeadCommitTrailer(t *testing.T) {
 	root := t.TempDir()
 	if _, err := exec.LookPath("git"); err != nil {
@@ -117,6 +181,41 @@ func TestApply_CleansHeadCommitTrailer(t *testing.T) {
 	}
 	if len(scanWithGit(t, root).Findings) != 0 {
 		t.Fatalf("expected clean rescan after HEAD commit-message fix")
+	}
+}
+
+func TestApply_PreviewDoesNotCleanHeadCommitTrailer(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "README.md")
+	runGit(t, root, "commit", "-m", "feat: demo", "-m", "Co-authored-by: Claude <noreply@anthropic.com>")
+	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	res := scanWithGit(t, root)
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		Preview: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CommitMessages != 1 || summary.CommitLinesRemoved != 1 {
+		t.Fatalf("summary = %+v, want preview of one commit message cleaned", summary)
+	}
+	if got := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("preview changed HEAD: got %s want %s", got, oldHead)
+	}
+	msg := runGit(t, root, "log", "-1", "--format=%B")
+	if !strings.Contains(strings.ToLower(msg), "co-authored-by: claude") {
+		t.Fatalf("preview removed Claude trailer:\n%s", msg)
 	}
 }
 
@@ -165,6 +264,47 @@ func TestApply_CleansScannedCommitTrailers(t *testing.T) {
 	}
 	if len(scanWithGit(t, root).Findings) != 0 {
 		t.Fatalf("expected clean rescan after scanned history fix")
+	}
+}
+
+func TestApply_PreviewDoesNotCleanScannedCommitTrailers(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "README.md")
+	runGit(t, root, "commit", "-m", "feat: demo", "-m", "Co-authored-by: Claude <noreply@anthropic.com>")
+
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "main.go")
+	runGit(t, root, "commit", "-m", "feat: app")
+	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	res := scanWithGit(t, root)
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		GitHistoryMode: string(fixer.GitHistoryScanned),
+		Preview:        true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CommitMessages != 1 || summary.CommitLinesRemoved != 1 {
+		t.Fatalf("summary = %+v, want preview of one historical commit cleaned", summary)
+	}
+	if got := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("preview changed HEAD: got %s want %s", got, oldHead)
+	}
+	if msg := runGit(t, root, "log", "--format=%B"); !strings.Contains(strings.ToLower(msg), "co-authored-by: claude") {
+		t.Fatalf("preview removed Claude trailer from history:\n%s", msg)
 	}
 }
 

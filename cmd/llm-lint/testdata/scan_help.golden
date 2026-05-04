@@ -10,7 +10,8 @@ Flags:
       --exclude strings          disable rule IDs (repeatable)
       --fail-on string           exit non-zero if any finding is at or above this severity (error|warning|info|none) (default: config file's fail_on or "error")
       --fix                      apply safe automatic fixes before reporting remaining findings
-      --fix-git-history string   with --fix, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)
+      --fix-git-history string   with --fix/--fix-preview, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)
+      --fix-preview              preview safe automatic fixes without modifying files, index, or git history
       --format string            output format: human|json|sarif|github (auto-detects to github when GITHUB_ACTIONS=true) (default "human")
       --gh-pr int                PR number (overrides auto-detect from event)
       --gh-repo string           owner/repo (overrides GITHUB_REPOSITORY)

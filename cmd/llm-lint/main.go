@@ -66,7 +66,8 @@ func newScanCmd() *cobra.Command {
 	f.Bool("no-baseline", false, "ignore baseline file even if present")
 	f.Bool("baseline-stale-fail", false, "exit non-zero if the baseline has stale entries")
 	f.Bool("fix", false, "apply safe automatic fixes before reporting remaining findings")
-	f.String("fix-git-history", "", "with --fix, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)")
+	f.Bool("fix-preview", false, "preview safe automatic fixes without modifying files, index, or git history")
+	f.String("fix-git-history", "", "with --fix/--fix-preview, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
@@ -98,12 +99,17 @@ func runScan(cmd *cobra.Command, args []string) error {
 	noBaseline, _ := cmd.Flags().GetBool("no-baseline")
 	baselineStaleFail, _ := cmd.Flags().GetBool("baseline-stale-fail")
 	fix, _ := cmd.Flags().GetBool("fix")
+	fixPreview, _ := cmd.Flags().GetBool("fix-preview")
 	fixGitHistory, _ := cmd.Flags().GetString("fix-git-history")
-	if fix && stagedOnly {
-		return fmt.Errorf("--fix cannot be used with --staged-only because staged-only scans the git index, not the worktree")
+	if fix && fixPreview {
+		return fmt.Errorf("--fix and --fix-preview cannot be used together")
 	}
-	if !fix && fixGitHistory != "" {
-		return fmt.Errorf("--fix-git-history requires --fix")
+	runFix := fix || fixPreview
+	if runFix && stagedOnly {
+		return fmt.Errorf("--fix/--fix-preview cannot be used with --staged-only because staged-only scans the git index, not the worktree")
+	}
+	if !runFix && fixGitHistory != "" {
+		return fmt.Errorf("--fix-git-history requires --fix or --fix-preview")
 	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
 		Includes:          include,
@@ -127,23 +133,23 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if fix {
+	if runFix {
 		summary, err := fixer.ApplyWithOptions(path, res.Findings, rules.DefaultRegistry(), fixer.Options{
 			GitHistoryMode: cfg.FixGitHistory(),
+			Preview:        fixPreview,
 		})
 		if err != nil {
 			return err
 		}
-		if !summary.Empty() {
-			fmt.Fprintf(os.Stderr, "fixed: %d files changed, %d lines removed, %d commit messages cleaned, %d commit lines removed, %d .gitignore entries added, %d index entries untracked\n",
-				summary.FilesChanged, summary.LinesRemoved, summary.CommitMessages, summary.CommitLinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
-		}
+		writeFixSummary(os.Stderr, summary, fixPreview)
 		if summary.Unfixable > 0 {
 			fmt.Fprintf(os.Stderr, "remaining: %d findings require manual review or history cleanup\n", summary.Unfixable)
 		}
-		res, err = eng.Run(path)
-		if err != nil {
-			return err
+		if !fixPreview {
+			res, err = eng.Run(path)
+			if err != nil {
+				return err
+			}
 		}
 	}
 
@@ -235,4 +241,16 @@ func indentText(s, pad string) string {
 		lines[i] = pad + l
 	}
 	return strings.Join(lines, "\n")
+}
+
+func writeFixSummary(w *os.File, summary fixer.Summary, preview bool) {
+	if summary.Empty() {
+		return
+	}
+	verb := "fixed"
+	if preview {
+		verb = "would fix"
+	}
+	fmt.Fprintf(w, "%s: %d files changed, %d lines removed, %d commit messages cleaned, %d commit lines removed, %d .gitignore entries added, %d index entries untracked\n",
+		verb, summary.FilesChanged, summary.LinesRemoved, summary.CommitMessages, summary.CommitLinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
 }
