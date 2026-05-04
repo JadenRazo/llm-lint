@@ -141,9 +141,13 @@ func runScan(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		writeFixSummary(os.Stderr, summary, fixPreview)
+		if err := writeFixSummary(os.Stderr, summary, fixPreview); err != nil {
+			return err
+		}
 		if summary.Unfixable > 0 {
-			fmt.Fprintf(os.Stderr, "remaining: %d findings require manual review or history cleanup\n", summary.Unfixable)
+			if _, err := fmt.Fprintf(os.Stderr, "remaining: %d findings require manual review or history cleanup\n", summary.Unfixable); err != nil {
+				return err
+			}
 		}
 		if !fixPreview {
 			res, err = eng.Run(path)
@@ -243,14 +247,15 @@ func indentText(s, pad string) string {
 	return strings.Join(lines, "\n")
 }
 
-func writeFixSummary(w *os.File, summary fixer.Summary, preview bool) {
+func writeFixSummary(w *os.File, summary fixer.Summary, preview bool) error {
 	if summary.Empty() {
-		return
+		return nil
 	}
 	verb := "fixed"
 	if preview {
 		verb = "would fix"
 	}
-	fmt.Fprintf(w, "%s: %d files changed, %d lines removed, %d commit messages cleaned, %d commit lines removed, %d .gitignore entries added, %d index entries untracked\n",
+	_, err := fmt.Fprintf(w, "%s: %d files changed, %d lines removed, %d commit messages cleaned, %d commit lines removed, %d .gitignore entries added, %d index entries untracked\n",
 		verb, summary.FilesChanged, summary.LinesRemoved, summary.CommitMessages, summary.CommitLinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
+	return err
 }
