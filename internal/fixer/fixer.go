@@ -14,6 +14,18 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/rules"
 )
 
+type GitHistoryMode string
+
+const (
+	GitHistoryNone    GitHistoryMode = "none"
+	GitHistoryLatest  GitHistoryMode = "latest"
+	GitHistoryScanned GitHistoryMode = "scanned"
+)
+
+type Options struct {
+	GitHistoryMode string
+}
+
 type Summary struct {
 	FilesChanged       int
 	LinesRemoved       int
@@ -29,9 +41,22 @@ func (s Summary) Empty() bool {
 }
 
 func Apply(root string, fs []findings.Finding, allRules map[string]rules.Rule) (Summary, error) {
+	return ApplyWithOptions(root, fs, allRules, Options{GitHistoryMode: string(GitHistoryLatest)})
+}
+
+func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]rules.Rule, opts Options) (Summary, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return Summary{}, err
+	}
+	mode := GitHistoryMode(opts.GitHistoryMode)
+	if mode == "" {
+		mode = GitHistoryLatest
+	}
+	switch mode {
+	case GitHistoryNone, GitHistoryLatest, GitHistoryScanned:
+	default:
+		return Summary{}, fmt.Errorf("invalid git history fix mode %q", mode)
 	}
 
 	var summary Summary
@@ -50,7 +75,6 @@ func Apply(root string, fs []findings.Finding, allRules map[string]rules.Rule) (
 			summary.Unfixable++
 			continue
 		}
-
 		switch {
 		case f.Location.Kind == findings.LocFile && r.Kind == rules.KindContent && r.AutoFix.RemoveLine && f.Location.Line > 0 && f.Location.Path != "":
 			byLine := contentTargets[f.Location.Path]
@@ -71,7 +95,7 @@ func Apply(root string, fs []findings.Finding, allRules map[string]rules.Rule) (
 		}
 	}
 
-	commitMessages, commitLinesRemoved, unfixable, err := fixHeadCommitMessages(absRoot, commitTargets)
+	commitMessages, commitLinesRemoved, unfixable, err := fixCommitMessages(absRoot, commitTargets, mode)
 	if err != nil {
 		return summary, err
 	}
@@ -137,12 +161,18 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule) (i
 	return changedFiles, removedLines, nil
 }
 
-func fixHeadCommitMessages(root string, targets map[string][]rules.Rule) (int, int, int, error) {
+func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHistoryMode) (int, int, int, error) {
 	if len(targets) == 0 {
 		return 0, 0, 0, nil
 	}
+	if mode == GitHistoryNone {
+		return 0, 0, lenCommitTargets(targets), nil
+	}
 	if _, err := os.Stat(filepath.Join(root, ".git")); err != nil {
 		return 0, 0, lenCommitTargets(targets), nil
+	}
+	if mode == GitHistoryScanned {
+		return rewriteScannedCommitMessages(root, targets)
 	}
 
 	head, err := gitOutput(root, "rev-parse", "HEAD")
@@ -175,10 +205,100 @@ func fixHeadCommitMessages(root string, targets map[string][]rules.Rule) (int, i
 	if strings.TrimSpace(cleaned) == "" {
 		return 0, 0, unfixable, fmt.Errorf("refusing to auto-fix HEAD commit message to empty")
 	}
-	if err := rewriteHeadCommitMessage(root, head, cleaned); err != nil {
+	meta, err := loadCommitMeta(root, "HEAD")
+	if err != nil {
+		return 0, 0, unfixable, err
+	}
+	newHead, err := createCommit(root, meta, cleaned, strings.Fields(meta.Parents))
+	if err != nil {
+		return 0, 0, unfixable, err
+	}
+	if err := updateHead(root, head, newHead); err != nil {
 		return 0, 0, unfixable, err
 	}
 	return 1, removed, unfixable, nil
+}
+
+func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule) (int, int, int, error) {
+	oldHead, err := gitOutput(root, "rev-parse", "HEAD")
+	if err != nil {
+		return 0, 0, lenCommitTargets(targets), nil
+	}
+	oldHead = strings.TrimSpace(oldHead)
+
+	revList, err := gitOutput(root, "rev-list", "--reverse", "--topo-order", "HEAD")
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	rewrite := map[string]string{}
+	seenTargets := map[string]struct{}{}
+	changedCommits, removedLines := 0, 0
+	unfixable := 0
+
+	for _, sha := range strings.Fields(revList) {
+		meta, err := loadCommitMeta(root, sha)
+		if err != nil {
+			return changedCommits, removedLines, unfixable, err
+		}
+		msg := meta.Message
+		cleaned := msg
+		removed := 0
+		if rs := targets[sha]; len(rs) > 0 {
+			seenTargets[sha] = struct{}{}
+			cleaned, removed = cleanCommitMessage(msg, rs)
+			if removed > 0 && strings.TrimSpace(cleaned) == "" {
+				return changedCommits, removedLines, unfixable, fmt.Errorf("refusing to auto-fix commit %s message to empty", shortSHA(sha))
+			}
+			if removed == 0 {
+				unfixable += len(rs)
+			}
+		}
+
+		parents := strings.Fields(meta.Parents)
+		newParents := make([]string, 0, len(parents))
+		parentChanged := false
+		for _, p := range parents {
+			np := rewrite[p]
+			if np == "" {
+				np = p
+			}
+			if np != p {
+				parentChanged = true
+			}
+			newParents = append(newParents, np)
+		}
+
+		if removed == 0 && !parentChanged {
+			rewrite[sha] = sha
+			continue
+		}
+
+		newSHA, err := createCommit(root, meta, cleaned, newParents)
+		if err != nil {
+			return changedCommits, removedLines, unfixable, err
+		}
+		rewrite[sha] = newSHA
+		if removed > 0 {
+			changedCommits++
+			removedLines += removed
+		}
+	}
+
+	newHead := rewrite[oldHead]
+	if newHead == "" {
+		return changedCommits, removedLines, lenCommitTargets(targets), nil
+	}
+	if newHead != oldHead {
+		if err := updateHead(root, oldHead, newHead); err != nil {
+			return changedCommits, removedLines, unfixable, err
+		}
+	}
+	for sha, rs := range targets {
+		if _, ok := seenTargets[sha]; !ok {
+			unfixable += len(rs)
+		}
+	}
+	return changedCommits, removedLines, unfixable, nil
 }
 
 func cleanCommitMessage(msg string, rs []rules.Rule) (string, int) {
@@ -217,73 +337,112 @@ func shouldRemoveCommitLine(line string, rs []rules.Rule) bool {
 	return false
 }
 
-func rewriteHeadCommitMessage(root, oldHead, msg string) error {
+type commitMeta struct {
+	Tree           string
+	Parents        string
+	AuthorName     string
+	AuthorEmail    string
+	AuthorDate     string
+	CommitterName  string
+	CommitterEmail string
+	CommitterDate  string
+	Message        string
+}
+
+func loadCommitMeta(root, sha string) (commitMeta, error) {
+	metaOut, err := gitOutput(root, "show", "-s", "--format=%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI", sha)
+	if err != nil {
+		return commitMeta{}, err
+	}
+	parts := strings.Split(strings.TrimRight(metaOut, "\n"), "\x00")
+	if len(parts) != 8 {
+		return commitMeta{}, fmt.Errorf("unexpected commit metadata for %s", shortSHA(sha))
+	}
+	msg, err := gitOutput(root, "log", "-1", "--format=%B", sha)
+	if err != nil {
+		return commitMeta{}, err
+	}
+	return commitMeta{
+		Tree:           strings.TrimSpace(parts[0]),
+		Parents:        parts[1],
+		AuthorName:     parts[2],
+		AuthorEmail:    parts[3],
+		AuthorDate:     parts[4],
+		CommitterName:  parts[5],
+		CommitterEmail: parts[6],
+		CommitterDate:  parts[7],
+		Message:        msg,
+	}, nil
+}
+
+func createCommit(root string, meta commitMeta, msg string, parents []string) (string, error) {
 	tmp, err := os.CreateTemp(root, ".llm-lint-commit-msg-*")
 	if err != nil {
-		return err
+		return "", err
 	}
 	tmpPath := tmp.Name()
 	defer func() { _ = os.Remove(tmpPath) }()
 	if _, err := tmp.WriteString(msg); err != nil {
 		_ = tmp.Close()
-		return err
+		return "", err
 	}
 	if err := tmp.Close(); err != nil {
-		return err
+		return "", err
 	}
 
-	tree, err := gitOutput(root, "show", "-s", "--format=%T", "HEAD")
-	if err != nil {
-		return err
-	}
-	parents, err := gitOutput(root, "show", "-s", "--format=%P", "HEAD")
-	if err != nil {
-		return err
-	}
-	author, err := gitOutput(root, "show", "-s", "--format=%an%x00%ae%x00%aI", "HEAD")
-	if err != nil {
-		return err
-	}
-	authorParts := strings.Split(strings.TrimRight(author, "\n"), "\x00")
-	if len(authorParts) != 3 {
-		return fmt.Errorf("unexpected HEAD author metadata")
-	}
-
-	args := []string{"-C", root, "commit-tree", strings.TrimSpace(tree)}
-	for _, p := range strings.Fields(parents) {
+	args := gitArgs(root, "commit-tree", meta.Tree)
+	for _, p := range parents {
 		args = append(args, "-p", p)
 	}
 	args = append(args, "-F", tmpPath)
 
 	cmd := exec.Command("git", args...)
 	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME="+authorParts[0],
-		"GIT_AUTHOR_EMAIL="+authorParts[1],
-		"GIT_AUTHOR_DATE="+authorParts[2],
+		"GIT_AUTHOR_NAME="+meta.AuthorName,
+		"GIT_AUTHOR_EMAIL="+meta.AuthorEmail,
+		"GIT_AUTHOR_DATE="+meta.AuthorDate,
+		"GIT_COMMITTER_NAME="+meta.CommitterName,
+		"GIT_COMMITTER_EMAIL="+meta.CommitterEmail,
+		"GIT_COMMITTER_DATE="+meta.CommitterDate,
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("git commit-tree: %w: %s", err, strings.TrimSpace(string(out)))
+		return "", fmt.Errorf("git commit-tree: %w: %s", err, strings.TrimSpace(string(out)))
 	}
-	newHead := strings.TrimSpace(string(out))
-	if newHead == "" {
-		return fmt.Errorf("git commit-tree returned empty commit id")
+	newSHA := strings.TrimSpace(string(out))
+	if newSHA == "" {
+		return "", fmt.Errorf("git commit-tree returned empty commit id")
 	}
+	return newSHA, nil
+}
 
-	cmd = exec.Command("git", "-C", root, "update-ref", "HEAD", newHead, oldHead)
+func updateHead(root, oldHead, newHead string) error {
+	cmd := exec.Command("git", gitArgs(root, "update-ref", "HEAD", newHead, oldHead)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git update-ref HEAD: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
 
+func shortSHA(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
+}
+
 func gitOutput(root string, args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+	cmd := exec.Command("git", gitArgs(root, args...)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+func gitArgs(root string, args ...string) []string {
+	out := []string{"-c", "safe.directory=" + root, "-C", root}
+	return append(out, args...)
 }
 
 func lenCommitTargets(targets map[string][]rules.Rule) int {
@@ -379,11 +538,11 @@ func untrack(root string, paths map[string]struct{}) (int, error) {
 
 	fixed := 0
 	for _, p := range ordered {
-		check := exec.Command("git", "-C", root, "ls-files", "--error-unmatch", "--", p)
+		check := exec.Command("git", gitArgs(root, "ls-files", "--error-unmatch", "--", p)...)
 		if err := check.Run(); err != nil {
 			continue
 		}
-		cmd := exec.Command("git", "-C", root, "rm", "--cached", "--ignore-unmatch", "--", p)
+		cmd := exec.Command("git", gitArgs(root, "rm", "--cached", "--ignore-unmatch", "--", p)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fixed, fmt.Errorf("git rm --cached %s: %w: %s", p, err, strings.TrimSpace(string(out)))
 		}

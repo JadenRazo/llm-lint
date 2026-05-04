@@ -120,6 +120,85 @@ func TestApply_CleansHeadCommitTrailer(t *testing.T) {
 	}
 }
 
+func TestApply_CleansScannedCommitTrailers(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "README.md")
+	runGit(t, root, "commit", "-m", "feat: demo", "-m", "Co-authored-by: Claude <noreply@anthropic.com>")
+	badCommit := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	if err := os.WriteFile(filepath.Join(root, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "main.go")
+	runGit(t, root, "commit", "-m", "feat: app")
+	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	res := scanWithGit(t, root)
+	if len(res.Findings) != 1 || res.Findings[0].Location.CommitSHA != badCommit {
+		t.Fatalf("expected one finding on older commit %s, got %#v", badCommit, res.Findings)
+	}
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		GitHistoryMode: string(fixer.GitHistoryScanned),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CommitMessages != 1 || summary.CommitLinesRemoved != 1 || summary.Unfixable != 0 {
+		t.Fatalf("summary = %+v, want one historical commit cleaned", summary)
+	}
+	newHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+	if newHead == oldHead {
+		t.Fatal("expected HEAD to move after rewriting an older commit")
+	}
+	if msg := runGit(t, root, "log", "--format=%B"); strings.Contains(strings.ToLower(msg), "co-authored-by: claude") {
+		t.Fatalf("auto-fix left Claude trailer in history:\n%s", msg)
+	}
+	if len(scanWithGit(t, root).Findings) != 0 {
+		t.Fatalf("expected clean rescan after scanned history fix")
+	}
+}
+
+func TestApply_GitHistoryNoneLeavesCommitFindingsUnfixable(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "README.md")
+	runGit(t, root, "commit", "-m", "feat: demo", "-m", "Co-authored-by: Claude <noreply@anthropic.com>")
+	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
+
+	res := scanWithGit(t, root)
+	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		GitHistoryMode: string(fixer.GitHistoryNone),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CommitMessages != 0 || summary.Unfixable != 1 {
+		t.Fatalf("summary = %+v, want commit finding left unfixable", summary)
+	}
+	if got := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD")); got != oldHead {
+		t.Fatalf("HEAD changed in none mode: got %s want %s", got, oldHead)
+	}
+}
+
 func scan(t *testing.T, root string) *engine.Result {
 	t.Helper()
 	cfg, err := config.Load(".llmlint.yaml", root)

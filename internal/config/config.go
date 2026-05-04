@@ -29,6 +29,12 @@ type BaselineConfig struct {
 	IncludeSnippets *bool  `json:"include_snippets,omitempty"`
 }
 
+type FixConfig struct {
+	// GitHistory controls whether --fix rewrites commit messages.
+	// Values: none | latest | scanned. "latest" is the conservative default.
+	GitHistory string `json:"git_history,omitempty"`
+}
+
 type Config struct {
 	Version    int                     `json:"version,omitempty"`
 	Categories []rules.Category        `json:"categories,omitempty"`
@@ -36,6 +42,7 @@ type Config struct {
 	Ignore     []string                `json:"ignore,omitempty"`
 	Scan       ScanConfig              `json:"scan,omitempty"`
 	Baseline   BaselineConfig          `json:"baseline,omitempty"`
+	Fix        FixConfig               `json:"fix,omitempty"`
 	FailOn     rules.Severity          `json:"fail_on,omitempty"`
 
 	includeRules      map[string]bool
@@ -46,6 +53,7 @@ type Config struct {
 	baselinePath      string
 	noBaseline        bool
 	baselineStaleFail bool
+	fixGitHistory     string
 	root              string
 }
 
@@ -104,6 +112,12 @@ func Load(configPath, root string) (*Config, error) {
 	if cfg.Scan.GitHistoryDepth == 0 {
 		cfg.Scan.GitHistoryDepth = 1000
 	}
+	if cfg.Fix.GitHistory == "" {
+		cfg.Fix.GitHistory = "latest"
+	}
+	if err := validateFixGitHistory(cfg.Fix.GitHistory); err != nil {
+		return nil, err
+	}
 	if cfg.Baseline.StaleAction != "" {
 		switch cfg.Baseline.StaleAction {
 		case "warn", "fail", "ignore":
@@ -126,6 +140,7 @@ type CLIOverrides struct {
 	BaselinePath      string
 	NoBaseline        bool
 	BaselineStaleFail bool
+	FixGitHistory     string
 }
 
 func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
@@ -148,6 +163,12 @@ func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
 	c.baselinePath = o.BaselinePath
 	c.noBaseline = o.NoBaseline
 	c.baselineStaleFail = o.BaselineStaleFail
+	if o.FixGitHistory != "" {
+		if err := validateFixGitHistory(o.FixGitHistory); err != nil {
+			return err
+		}
+		c.fixGitHistory = o.FixGitHistory
+	}
 	return nil
 }
 
@@ -179,6 +200,16 @@ func (c *Config) BaselineIncludeSnippets() bool {
 		return *c.Baseline.IncludeSnippets
 	}
 	return true
+}
+
+func (c *Config) FixGitHistory() string {
+	if c.fixGitHistory != "" {
+		return c.fixGitHistory
+	}
+	if c.Fix.GitHistory != "" {
+		return c.Fix.GitHistory
+	}
+	return "latest"
 }
 
 func (c *Config) GitEnabled() bool {
@@ -240,3 +271,12 @@ func (c *Config) IsIgnored(relPath string) bool {
 }
 
 func (c *Config) HistoryDepth() int { return c.Scan.GitHistoryDepth }
+
+func validateFixGitHistory(s string) error {
+	switch s {
+	case "none", "latest", "scanned":
+		return nil
+	default:
+		return fmt.Errorf("invalid fix.git_history %q (want none|latest|scanned)", s)
+	}
+}

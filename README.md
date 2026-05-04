@@ -91,7 +91,17 @@ For deterministic cleanup, run:
 llm-lint scan --fix
 ```
 
-Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and strips AI trailers/markers from the latest commit message. Older git-history findings are still reported for manual review because broad history rewrites are intentionally not automatic.
+Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and strips AI trailers/markers from the latest commit message.
+
+Commit-message cleanup is configurable:
+
+```bash
+llm-lint scan --fix --fix-git-history latest   # default: only HEAD
+llm-lint scan --fix --fix-git-history scanned  # rewrite all matching scanned commits on HEAD history
+llm-lint scan --fix --fix-git-history none     # leave commit findings as manual
+```
+
+Use `scanned` when you intentionally want to scrub all matching AI traces from the scanned history. This rewrites commit IDs for cleaned commits and their descendants, and rewritten commits will not retain commit signatures, so coordinate before using it on shared branches.
 
 ## CI integration
 
@@ -240,6 +250,10 @@ scan:
   git_history: true
   git_history_depth: 1000   # 0 = full history
 
+# Auto-fix policy used when `llm-lint scan --fix` runs
+fix:
+  git_history: latest        # none | latest | scanned
+
 fail_on: error              # error | warning | info | none
 ```
 
@@ -254,6 +268,7 @@ llm-lint scan --fail-on warning
 llm-lint scan --no-git            # skip history scan
 llm-lint scan --since v1.0.0      # only commits newer than this ref
 llm-lint scan --staged-only       # scan the git index (pre-commit hook mode)
+llm-lint scan --fix --fix-git-history scanned
 llm-lint scan --include LLM015 --exclude LLM004
 llm-lint rules                    # list all rules with severity + category
 llm-lint rules show LLM003        # full description + remediation

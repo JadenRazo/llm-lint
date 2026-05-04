@@ -45,6 +45,8 @@ rules:
 fail_on: warning
 scan:
   git_history_depth: 50
+fix:
+  git_history: scanned
 `
 	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
 		t.Fatal(err)
@@ -70,6 +72,9 @@ scan:
 	}
 	if cfg.HistoryDepth() != 50 {
 		t.Errorf("depth: got %d want 50", cfg.HistoryDepth())
+	}
+	if cfg.FixGitHistory() != "scanned" {
+		t.Errorf("fix.git_history: got %q want scanned", cfg.FixGitHistory())
 	}
 }
 
@@ -125,12 +130,16 @@ func TestApplyCLIOverrides_BaselineFlags(t *testing.T) {
 	if cfg.Since() != "" || cfg.StagedOnly() {
 		t.Error("Since/StagedOnly should default to zero")
 	}
+	if cfg.FixGitHistory() != "latest" {
+		t.Errorf("FixGitHistory default: got %q want latest", cfg.FixGitHistory())
+	}
 
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
 		Since:             "HEAD~5",
 		BaselinePath:      "custom-baseline.yaml",
 		NoBaseline:        true,
 		BaselineStaleFail: true,
+		FixGitHistory:     "none",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -145,6 +154,9 @@ func TestApplyCLIOverrides_BaselineFlags(t *testing.T) {
 	}
 	if cfg.BaselineStaleAction() != "fail" {
 		t.Errorf("--baseline-stale-fail should override stale_action to 'fail'; got %q", cfg.BaselineStaleAction())
+	}
+	if cfg.FixGitHistory() != "none" {
+		t.Errorf("FixGitHistory override: got %q want none", cfg.FixGitHistory())
 	}
 }
 
@@ -209,6 +221,20 @@ baseline:
 	}
 	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
 		t.Error("expected error for invalid stale_action; got nil")
+	}
+}
+
+func TestLoad_RejectsInvalidFixGitHistory(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+fix:
+  git_history: everything
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for invalid fix.git_history; got nil")
 	}
 }
 

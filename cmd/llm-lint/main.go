@@ -66,6 +66,7 @@ func newScanCmd() *cobra.Command {
 	f.Bool("no-baseline", false, "ignore baseline file even if present")
 	f.Bool("baseline-stale-fail", false, "exit non-zero if the baseline has stale entries")
 	f.Bool("fix", false, "apply safe automatic fixes before reporting remaining findings")
+	f.String("fix-git-history", "", "with --fix, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
@@ -97,8 +98,12 @@ func runScan(cmd *cobra.Command, args []string) error {
 	noBaseline, _ := cmd.Flags().GetBool("no-baseline")
 	baselineStaleFail, _ := cmd.Flags().GetBool("baseline-stale-fail")
 	fix, _ := cmd.Flags().GetBool("fix")
+	fixGitHistory, _ := cmd.Flags().GetString("fix-git-history")
 	if fix && stagedOnly {
 		return fmt.Errorf("--fix cannot be used with --staged-only because staged-only scans the git index, not the worktree")
+	}
+	if !fix && fixGitHistory != "" {
+		return fmt.Errorf("--fix-git-history requires --fix")
 	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
 		Includes:          include,
@@ -109,6 +114,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		BaselinePath:      baselinePath,
 		NoBaseline:        noBaseline,
 		BaselineStaleFail: baselineStaleFail,
+		FixGitHistory:     fixGitHistory,
 	}); err != nil {
 		return err
 	}
@@ -122,7 +128,9 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	if fix {
-		summary, err := fixer.Apply(path, res.Findings, rules.DefaultRegistry())
+		summary, err := fixer.ApplyWithOptions(path, res.Findings, rules.DefaultRegistry(), fixer.Options{
+			GitHistoryMode: cfg.FixGitHistory(),
+		})
 		if err != nil {
 			return err
 		}

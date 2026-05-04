@@ -302,3 +302,23 @@ func TestFix_RejectsStagedOnly(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestFixGitHistory_RequiresFix(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# clean\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRoot()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"scan", "--fix-git-history", "scanned", "--no-git", root})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for --fix-git-history without --fix")
+	}
+	if !strings.Contains(err.Error(), "--fix-git-history requires --fix") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
