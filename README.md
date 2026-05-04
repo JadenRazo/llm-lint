@@ -91,7 +91,7 @@ For deterministic cleanup, run:
 llm-lint scan --fix
 ```
 
-Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, and untracks local AI/tool files with `git rm --cached` while keeping them in your working tree. Git history findings are still reported for manual review because rewriting commits is intentionally not automatic.
+Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and strips AI trailers/markers from the latest commit message. Older git-history findings are still reported for manual review because broad history rewrites are intentionally not automatic.
 
 ## CI integration
 

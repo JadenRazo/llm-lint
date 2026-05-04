@@ -127,8 +127,8 @@ func runScan(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if !summary.Empty() {
-			fmt.Fprintf(os.Stderr, "fixed: %d files changed, %d lines removed, %d .gitignore entries added, %d index entries untracked\n",
-				summary.FilesChanged, summary.LinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
+			fmt.Fprintf(os.Stderr, "fixed: %d files changed, %d lines removed, %d commit messages cleaned, %d commit lines removed, %d .gitignore entries added, %d index entries untracked\n",
+				summary.FilesChanged, summary.LinesRemoved, summary.CommitMessages, summary.CommitLinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
 		}
 		if summary.Unfixable > 0 {
 			fmt.Fprintf(os.Stderr, "remaining: %d findings require manual review or history cleanup\n", summary.Unfixable)

@@ -85,6 +85,41 @@ func TestApply_IgnoresAndUntracksPathFindings(t *testing.T) {
 	}
 }
 
+func TestApply_CleansHeadCommitTrailer(t *testing.T) {
+	root := t.TempDir()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	runGit(t, root, "init")
+	runGit(t, root, "config", "user.email", "test@example.com")
+	runGit(t, root, "config", "user.name", "Test")
+
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# demo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, root, "add", "README.md")
+	runGit(t, root, "commit", "-m", "feat: demo", "-m", "Co-authored-by: Claude <noreply@anthropic.com>")
+
+	res := scanWithGit(t, root)
+	if len(res.Findings) != 1 || res.Findings[0].RuleID != "LLM003" {
+		t.Fatalf("expected one LLM003 finding, got %#v", res.Findings)
+	}
+	summary, err := fixer.Apply(root, res.Findings, rules.DefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if summary.CommitMessages != 1 || summary.CommitLinesRemoved != 1 {
+		t.Fatalf("summary = %+v, want one commit message cleaned and one line removed", summary)
+	}
+	msg := runGit(t, root, "log", "-1", "--format=%B")
+	if strings.Contains(strings.ToLower(msg), "co-authored-by: claude") {
+		t.Fatalf("auto-fix left Claude trailer behind:\n%s", msg)
+	}
+	if len(scanWithGit(t, root).Findings) != 0 {
+		t.Fatalf("expected clean rescan after HEAD commit-message fix")
+	}
+}
+
 func scan(t *testing.T, root string) *engine.Result {
 	t.Helper()
 	cfg, err := config.Load(".llmlint.yaml", root)
@@ -92,6 +127,22 @@ func scan(t *testing.T, root string) *engine.Result {
 		t.Fatal(err)
 	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{NoGit: true, NoBaseline: true}); err != nil {
+		t.Fatal(err)
+	}
+	res, err := engine.New(rules.DefaultRegistry(), cfg).Run(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res
+}
+
+func scanWithGit(t *testing.T, root string) *engine.Result {
+	t.Helper()
+	cfg, err := config.Load(".llmlint.yaml", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{NoBaseline: true}); err != nil {
 		t.Fatal(err)
 	}
 	res, err := engine.New(rules.DefaultRegistry(), cfg).Run(root)

@@ -64,6 +64,8 @@ type AutoFix struct {
 	GitignorePatterns []string
 	// RemoveLine removes content-rule lines that match the rule's patterns.
 	RemoveLine bool
+	// AmendLatestCommit removes matching git-message/trailer lines from HEAD.
+	AmendLatestCommit bool
 }
 
 type Match struct {

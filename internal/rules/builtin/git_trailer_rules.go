@@ -17,6 +17,7 @@ func init() {
 			// contributors are sometimes named Claude.
 			`(?i)^co-authored-by:\s*claude\s+code\b`,
 		},
+		AutoFix:     rules.AutoFix{AmendLatestCommit: true},
 		Description: "Commit trailer attributing co-authorship to Claude. Many production teams strip these to keep `git log` author-clean.",
 		Remediation: `To prevent this on future commits, edit your local Claude Code settings:
 
@@ -47,6 +48,7 @@ To clean history, reword the offending commits with an interactive rebase
 			`🤖 Generated with \[Claude Code\]`,
 			`(?i)generated with claude`,
 		},
+		AutoFix:     rules.AutoFix{AmendLatestCommit: true},
 		Description: "Commit message body advertises Claude generation. The same `includeCoAuthoredBy` setting gates this footer in recent Claude Code versions.",
 		Remediation: "Set `includeCoAuthoredBy: false` in `~/.claude/settings.json` to stop this in future commits, then `git rebase -i` to reword existing offenders.",
 	})
@@ -62,6 +64,7 @@ To clean history, reword the offending commits with an interactive rebase
 			`(?i)^co-authored-by:\s*github\s+copilot\b`,
 			`(?i)^co-authored-by:\s*copilot\s*<`,
 		},
+		AutoFix:     rules.AutoFix{AmendLatestCommit: true},
 		Description: "Generic AI co-authorship trailer (Copilot, OpenAI, Cursor, Codeium, Aider).",
 		Remediation: "Configure the relevant tool to stop appending its trailer; rebase or `git filter-repo` to clean history.",
 	})
