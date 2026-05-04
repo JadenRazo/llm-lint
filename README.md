@@ -83,6 +83,16 @@ Exit codes:
 - `1` — findings exceeded threshold
 - `2` — internal error (bad config, IO, etc.)
 
+## Auto-fix
+
+For deterministic cleanup, run:
+
+```bash
+llm-lint scan --fix
+```
+
+Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, and untracks local AI/tool files with `git rm --cached` while keeping them in your working tree. Git history findings are still reported for manual review because rewriting commits is intentionally not automatic.
+
 ## CI integration
 
 ### GitHub Actions (recommended: native annotations)

@@ -282,3 +282,23 @@ func TestFailOn_InvalidValueRejected(t *testing.T) {
 		t.Errorf("error %q missing offending value %q", msg, "garbge")
 	}
 }
+
+func TestFix_RejectsStagedOnly(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# clean\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRoot()
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"scan", "--fix", "--staged-only", "--no-git", root})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for --fix with --staged-only")
+	}
+	if !strings.Contains(err.Error(), "--fix cannot be used with --staged-only") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

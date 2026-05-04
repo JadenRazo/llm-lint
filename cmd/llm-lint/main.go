@@ -9,6 +9,7 @@ import (
 
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/engine"
+	"github.com/JadenRazo/llm-lint/internal/fixer"
 	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/report"
 	"github.com/JadenRazo/llm-lint/internal/rules"
@@ -64,6 +65,7 @@ func newScanCmd() *cobra.Command {
 	f.String("baseline", "", "baseline file path (default: .llmlint-baseline.yaml if present)")
 	f.Bool("no-baseline", false, "ignore baseline file even if present")
 	f.Bool("baseline-stale-fail", false, "exit non-zero if the baseline has stale entries")
+	f.Bool("fix", false, "apply safe automatic fixes before reporting remaining findings")
 	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
 	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
@@ -94,6 +96,10 @@ func runScan(cmd *cobra.Command, args []string) error {
 	baselinePath, _ := cmd.Flags().GetString("baseline")
 	noBaseline, _ := cmd.Flags().GetBool("no-baseline")
 	baselineStaleFail, _ := cmd.Flags().GetBool("baseline-stale-fail")
+	fix, _ := cmd.Flags().GetBool("fix")
+	if fix && stagedOnly {
+		return fmt.Errorf("--fix cannot be used with --staged-only because staged-only scans the git index, not the worktree")
+	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
 		Includes:          include,
 		Excludes:          exclude,
@@ -114,6 +120,23 @@ func runScan(cmd *cobra.Command, args []string) error {
 	res, err := eng.Run(path)
 	if err != nil {
 		return err
+	}
+	if fix {
+		summary, err := fixer.Apply(path, res.Findings, rules.DefaultRegistry())
+		if err != nil {
+			return err
+		}
+		if !summary.Empty() {
+			fmt.Fprintf(os.Stderr, "fixed: %d files changed, %d lines removed, %d .gitignore entries added, %d index entries untracked\n",
+				summary.FilesChanged, summary.LinesRemoved, summary.GitignoreAdded, summary.IndexEntriesFixed)
+		}
+		if summary.Unfixable > 0 {
+			fmt.Fprintf(os.Stderr, "remaining: %d findings require manual review or history cleanup\n", summary.Unfixable)
+		}
+		res, err = eng.Run(path)
+		if err != nil {
+			return err
+		}
 	}
 
 	format, _ := cmd.Flags().GetString("format")

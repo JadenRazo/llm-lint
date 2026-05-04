@@ -50,11 +50,20 @@ type Rule struct {
 	Kind        Kind
 	Description string
 	Remediation string
+	AutoFix     AutoFix
 
 	PathGlobs       []string
 	ContentPatterns []string
 	TrailerPatterns []string
 	MessagePatterns []string
+}
+
+type AutoFix struct {
+	// GitignorePatterns are appended to .gitignore for path rules before the
+	// matched path is removed from the git index with `git rm --cached`.
+	GitignorePatterns []string
+	// RemoveLine removes content-rule lines that match the rule's patterns.
+	RemoveLine bool
 }
 
 type Match struct {
