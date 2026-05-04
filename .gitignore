@@ -8,6 +8,7 @@ coverage.html
 *.tgz
 npm/build/
 node_modules/
+demo/llm-lint-demo-frames-*/
 .idea/
 .vscode/
 .DS_Store

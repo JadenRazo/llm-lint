@@ -1,4 +1,4 @@
-# vhs tape for the llm-lint launch GIF.
+# vhs tape for the llm-lint autofix GIF.
 # Run: bash demo/record.sh
 # Or:  cd demo && vhs demo.tape
 # Output: demo/demo.gif
@@ -27,47 +27,31 @@ Type "DEMO_DIR=$(mktemp -d -t llm-lint-demo.XXXX) && cd $DEMO_DIR"
 Enter
 Type "git init -q -b main && git config user.email demo@example.com && git config user.name 'Demo Dev'"
 Enter
+Type "echo 'project context for Claude' > CLAUDE.md"
+Enter
+Type "echo 'editor rules' > .cursorrules"
+Enter
+Type 'git add . && git commit -q -m "feat: ship the thing" -m "Co-authored-by: Claude <noreply@anthropic.com>"'
+Enter
 Type "clear"
 Enter
 Sleep 300ms
 Show
 
-# --- Scene 1: the artifacts land. Visual story carries it — no narration. ---
-Type "echo 'project context for Claude' > CLAUDE.md"
+# --- Scene 1: preview what autofix would do. ---
+Type "npx @jadenrazo/llm-lint scan --fix-preview --fix-git-history latest --fail-on none --no-progress"
 Sleep 300ms
 Enter
+Sleep 3500ms
 
-Type "echo 'editor rules' > .cursorrules"
+# --- Scene 2: apply the same fixes. ---
+Type "npx @jadenrazo/llm-lint scan --fix --fix-git-history latest --fail-on none --no-progress"
 Sleep 300ms
 Enter
-
-Type 'git add . && git commit -q -m "feat: ship the thing" -m "Co-authored-by: Claude <noreply@anthropic.com>"'
-Sleep 1s
-Enter
-Sleep 1500ms
-
-# --- Scene 2: scan and surface findings. One command, no install. ---
-Type "# No install needed:"
-Sleep 800ms
-Enter
-
-Type "npx @jadenrazo/llm-lint scan"
-Sleep 300ms
-Enter
-Sleep 3s
-
-# --- Scene 3: drill into a rule's full remediation. ---
-Type "# Every finding ships with concrete remediation:"
-Sleep 1500ms
-Enter
-
-Type "npx @jadenrazo/llm-lint rules show LLM003"
-Sleep 300ms
-Enter
-Sleep 6s
-
-# --- Tail. ---
-Type "# In CI, --fail-on error blocks the merge."
 Sleep 2500ms
+
+# --- Scene 3: clean follow-up scan. ---
+Type "npx @jadenrazo/llm-lint scan --fail-on none --no-progress"
+Sleep 300ms
 Enter
-Sleep 1500ms
+Sleep 2500ms
