@@ -170,18 +170,4 @@ If you want repo guidance for Claude Code, keep a local-only file at
 		Description: "Windsurf editor rules and state are developer-environment specific.",
 		Remediation: "Add `.windsurfrules` and `.windsurf/` to .gitignore.",
 	})
-
-	rules.Register(rules.Rule{
-		ID:       "LLM015",
-		Title:    "claude-code MCP referenced in .mcp.json",
-		Severity: rules.SevInfo,
-		Category: rules.CatClaude,
-		Kind:     rules.KindPath,
-		PathGlobs: []string{
-			".mcp.json",
-			"**/.mcp.json",
-		},
-		Description: "An .mcp.json at the repo root is read by Claude Code (and other MCP-aware clients). If it pins paths or local secrets, it shouldn't ship.",
-		Remediation: "Review the file. If it contains local-only paths or refs (e.g. claude-code MCP servers), move it to `.claude/` (which should already be gitignored) or scrub local paths.",
-	})
 }

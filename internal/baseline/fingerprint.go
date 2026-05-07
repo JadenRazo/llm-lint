@@ -17,9 +17,9 @@ const fingerprintSep = byte(0x00)
 
 // Fingerprint returns "sha256:<hex>" for f. Composition rules (per rule kind):
 //
-//   - path findings (LLM001/2/5/6/7/8/9/10/11/15):
+//   - path findings (LLM001/2/5/6/7/8/9/10/11):
 //     sha256(rule_id || NUL || "path"    || NUL || slash_path)
-//   - content findings (LLM013/14):
+//   - content findings (LLM013/14/15):
 //     sha256(rule_id || NUL || "content" || NUL || normalized_match)
 //   - trailer findings (LLM003/12):
 //     sha256(rule_id || NUL || "trailer" || NUL || sha)

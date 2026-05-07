@@ -311,7 +311,7 @@ Yes — but commit-trailer rules need history. On `actions/checkout` use `fetch-
 Add the path or pattern to your `.llmlint.yaml` `ignore` list, and/or disable noisy info-level rules (`LLM013`, `LLM014`) for repos that intentionally include LLM strings.
 
 **Can I auto-fix?**
-Not yet. We flag and teach; we don't rewrite. Auto-fix (`--fix` mode that adds `.gitignore` entries and runs `git rm --cached`) is on the roadmap; track [issues](https://github.com/JadenRazo/llm-lint/issues) for progress.
+Yes. Run `llm-lint scan --fix-preview` to review the deterministic cleanup plan, then `llm-lint scan --fix` to apply it. History cleanup is conservative by default: only `HEAD` commit-message findings are rewritten unless you opt into broader scanned-history cleanup with `--fix-git-history scanned`.
 
 **Why is the npm package scoped (`@jadenrazo/llm-lint`)?**
 The bare `llm-lint` name on npm is squatted by an unrelated project. Scoping under `@jadenrazo` keeps the name unambiguous and the publish path uncomplicated.

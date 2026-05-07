@@ -140,6 +140,10 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule, pr
 		if err != nil {
 			return changedFiles, removedLines, err
 		}
+		st, err := os.Stat(path)
+		if err != nil {
+			return changedFiles, removedLines, err
+		}
 		lines := splitLines(data)
 		var out [][]byte
 		changed := false
@@ -157,7 +161,7 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule, pr
 				changedFiles++
 				continue
 			}
-			if err := os.WriteFile(path, bytes.Join(out, nil), 0o644); err != nil {
+			if err := os.WriteFile(path, bytes.Join(out, nil), st.Mode().Perm()); err != nil {
 				return changedFiles, removedLines, err
 			}
 			changedFiles++

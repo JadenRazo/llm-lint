@@ -92,12 +92,20 @@ func TestApplyCLIOverrides_NoGit(t *testing.T) {
 }
 
 func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
-	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	dir := t.TempDir()
+	yaml := `version: 1
+categories:
+  - claude
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load(".llmlint.yaml", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes: []string{"LLM099"},
+		Includes: []string{"llm006"},
 		Excludes: []string{"LLM001"},
 	}); err != nil {
 		t.Fatal(err)
@@ -105,8 +113,8 @@ func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
 	if cfg.IsRuleEnabled("LLM001") {
 		t.Error("LLM001 should be excluded")
 	}
-	if !cfg.IsRuleEnabled("LLM099") {
-		t.Error("LLM099 should be force-included")
+	if !cfg.IsRuleEnabled("LLM006") {
+		t.Error("LLM006 should be force-included even though category filtering would exclude it")
 	}
 }
 
@@ -235,6 +243,76 @@ fix:
 	}
 	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
 		t.Error("expected error for invalid fix.git_history; got nil")
+	}
+}
+
+func TestLoad_RejectsInvalidFailOn(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+fail_on: noisy
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for invalid fail_on; got nil")
+	}
+}
+
+func TestLoad_RejectsInvalidRuleSeverity(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+rules:
+  LLM013:
+    severity: noisy
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for invalid rule severity; got nil")
+	}
+}
+
+func TestLoad_RejectsUnknownRuleID(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+rules:
+  LLM999:
+    enabled: false
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for unknown rule id; got nil")
+	}
+}
+
+func TestLoad_RejectsInvalidCategory(t *testing.T) {
+	dir := t.TempDir()
+	yaml := `version: 1
+categories:
+  - bogus
+`
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(yaml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+		t.Error("expected error for invalid category; got nil")
+	}
+}
+
+func TestApplyCLIOverrides_RejectsUnknownRuleIDs(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{Includes: []string{"LLM999"}}); err == nil {
+		t.Error("expected error for unknown --include rule id; got nil")
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{Excludes: []string{"LLM999"}}); err == nil {
+		t.Error("expected error for unknown --exclude rule id; got nil")
 	}
 }
 
