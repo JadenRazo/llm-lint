@@ -1,6 +1,7 @@
 package builtin_test
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -54,10 +55,6 @@ func TestPathGlobs(t *testing.T) {
 
 		{".windsurfrules", "LLM011", true},
 		{".windsurf/state.json", "LLM011", true},
-
-		{".mcp.json", "LLM015", true},
-		{"sub/.mcp.json", "LLM015", true},
-		{"mcp.json", "LLM015", false},
 	}
 
 	for _, tc := range cases {
@@ -79,6 +76,58 @@ func TestPathGlobs(t *testing.T) {
 		if matched != tc.want {
 			t.Errorf("rule %s on path %q: got match=%v want=%v", tc.rule, tc.path, matched, tc.want)
 		}
+	}
+}
+
+func TestLLM015ContentPathGlobsAndPatterns(t *testing.T) {
+	r, ok := rules.Get("LLM015")
+	if !ok {
+		t.Fatal("LLM015 not registered")
+	}
+	if r.Kind != rules.KindContent {
+		t.Fatalf("LLM015 kind = %s, want content", r.Kind)
+	}
+
+	pathCases := []struct {
+		path string
+		want bool
+	}{
+		{".mcp.json", true},
+		{"sub/.mcp.json", true},
+		{"mcp.json", false},
+	}
+	for _, tc := range pathCases {
+		matched := false
+		for _, glob := range r.ContentPathGlobs {
+			ok, err := doublestar.PathMatch(glob, tc.path)
+			if err != nil {
+				t.Fatalf("rule %s content path glob %q invalid: %v", r.ID, glob, err)
+			}
+			if ok {
+				matched = true
+				break
+			}
+		}
+		if matched != tc.want {
+			t.Errorf("LLM015 on path %q: got match=%v want=%v", tc.path, matched, tc.want)
+		}
+	}
+
+	var contentMatch bool
+	for _, pat := range r.ContentPatterns {
+		re, err := regexp.Compile(pat)
+		if err != nil {
+			t.Fatalf("LLM015 pattern %q invalid: %v", pat, err)
+		}
+		if re.MatchString(`{"mcpServers":{"claude-code":{"command":"claude-code"}}}`) {
+			contentMatch = true
+		}
+		if re.MatchString(`{"mcpServers":{"local-dev":{"command":"dev-server"}}}`) {
+			t.Fatalf("LLM015 pattern %q matched unrelated MCP config", pat)
+		}
+	}
+	if !contentMatch {
+		t.Fatal("LLM015 patterns did not match claude-code MCP content")
 	}
 }
 
