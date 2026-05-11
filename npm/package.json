@@ -31,7 +31,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=18.20.8"
   },
   "optionalDependencies": {
     "@jadenrazo/llm-lint-linux-x64": "0.0.0-dev",
