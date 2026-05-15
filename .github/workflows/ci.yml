@@ -88,7 +88,7 @@ jobs:
         run: go run ./cmd/llm-lint scan --format sarif --output llm-lint.sarif || true
       - name: Upload SARIF to code scanning
         if: always() && hashFiles('llm-lint.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: llm-lint.sarif
           category: llm-lint
