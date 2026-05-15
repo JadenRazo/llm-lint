@@ -8,6 +8,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.9.0
 	github.com/go-git/go-git/v5 v5.19.0
 	github.com/owenrumney/go-sarif/v2 v2.3.3
+	github.com/owenrumney/go-sarif/v3 v3.3.0
 	github.com/saracen/walker v0.1.4
 	github.com/spf13/cobra v1.10.2
 	github.com/xeipuuv/gojsonschema v1.2.0
