@@ -99,7 +99,7 @@ jobs:
       - name: Setup Node for npm publish
         uses: actions/setup-node@v4
         with:
-          node-version: '22.22.3'
+          node-version: '24.15.0'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Build npm packages
