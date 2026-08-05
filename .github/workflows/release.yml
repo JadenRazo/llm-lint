@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
           cache: true
       - run: go mod verify
       - run: go vet ./...
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
           cache: true
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
           cache: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: govulncheck ./...
@@ -61,7 +61,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
           cache: true
       - run: go run ./cmd/llm-lint scan --fail-on error
 
@@ -80,7 +80,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.3'
+          go-version: '1.26.5'
           cache: true
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v3
