@@ -40,7 +40,7 @@ In scope:
 
 Out of scope:
 
-- Issues in third-party Go modules used by `llm-lint` — please report those upstream. Dependabot and `govulncheck` cover known CVEs in our CI; if you find a new one, please file with the upstream project too.
+- Issues in third-party Go modules used by `llm-lint` — please report those upstream. Renovate and `govulncheck` cover known CVEs in our CI; if you find a new one, please file with the upstream project too.
 - Best-practice or hardening suggestions that aren't exploitable — open a regular GitHub issue or PR for those.
 
 ## Verifying release artifacts
