@@ -7,11 +7,12 @@ package progress
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 const renderInterval = 100 * time.Millisecond
@@ -43,7 +44,7 @@ type Reporter struct {
 func New(w io.Writer, enabled bool) *Reporter {
 	return &Reporter{
 		w:       w,
-		enabled: enabled && isTTY(w),
+		enabled: enabled && textutil.IsTTY(w),
 	}
 }
 
@@ -245,16 +246,4 @@ func humanDur(d time.Duration) string {
 	m := int(d.Minutes())
 	s := int(d.Seconds()) - m*60
 	return fmt.Sprintf("%dm%ds", m, s)
-}
-
-func isTTY(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	st, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return (st.Mode() & os.ModeCharDevice) != 0
 }

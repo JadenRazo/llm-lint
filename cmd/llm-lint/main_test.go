@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,9 +16,8 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/rules"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
-
-var update = flag.Bool("update", false, "regenerate CLI goldens under cmd/llm-lint/testdata/")
 
 // captureStdout pipes os.Stdout for the duration of fn and returns whatever
 // was written. Not parallel-safe (global os.Stdout) — tests using it run
@@ -73,24 +71,7 @@ func runCommand(t *testing.T, args ...string) ([]byte, []byte) {
 
 func compareGolden(t *testing.T, name string, got []byte) {
 	t.Helper()
-	path := filepath.Join("testdata", name)
-	if *update {
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(path, got, 0o644); err != nil {
-			t.Fatalf("write golden: %v", err)
-		}
-		t.Logf("updated golden %s", path)
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden %s: %v (run `go test ./cmd/llm-lint/... -update` to create it)", path, err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("%s mismatch.\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
+	testutil.CompareGolden(t, filepath.Join("testdata", name), got)
 }
 
 func TestCLI_Help(t *testing.T) {

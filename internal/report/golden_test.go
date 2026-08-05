@@ -2,8 +2,6 @@ package report_test
 
 import (
 	"bytes"
-	"flag"
-	"os"
 	"path/filepath"
 	"regexp"
 	"testing"
@@ -12,9 +10,8 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/report"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
-
-var update = flag.Bool("update", false, "regenerate report goldens under testdata/")
 
 // fixedResult is the canonical fixture for reporter golden comparisons.
 // Spans every Severity (error/warning/info), every Location.Kind (file/commit),
@@ -23,6 +20,8 @@ var update = flag.Bool("update", false, "regenerate report goldens under testdat
 func fixedResult() *engine.Result {
 	res := &engine.Result{
 		FilesScanned:   42,
+		FilesWalked:    57,
+		BytesRead:      12345,
 		CommitsScanned: 7,
 		DurationMS:     0, // pinned for determinism
 		Findings: []findings.Finding{
@@ -109,21 +108,7 @@ func goldenPath(t *testing.T, name string) string {
 
 func compareGolden(t *testing.T, name string, got []byte) {
 	t.Helper()
-	path := goldenPath(t, name)
-	if *update {
-		if err := os.WriteFile(path, got, 0o644); err != nil {
-			t.Fatalf("write golden: %v", err)
-		}
-		t.Logf("updated golden %s", path)
-		return
-	}
-	want, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read golden %s: %v (run `go test -update ./internal/report/...` to create it)", path, err)
-	}
-	if !bytes.Equal(got, want) {
-		t.Errorf("%s mismatch.\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
-	}
+	testutil.CompareGolden(t, goldenPath(t, name), got)
 }
 
 func TestJSONReporter_Golden(t *testing.T) {

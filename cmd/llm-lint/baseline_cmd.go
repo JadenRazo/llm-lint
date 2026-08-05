@@ -11,7 +11,6 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/baseline"
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/engine"
-	"github.com/JadenRazo/llm-lint/internal/rules"
 )
 
 func newBaselineCmd() *cobra.Command {
@@ -26,16 +25,11 @@ func newBaselineCmd() *cobra.Command {
 	return cmd
 }
 
-// baselineScanFlags adds the flags every baseline subcommand reuses.
+// baselineScanFlags adds the flags every baseline subcommand reuses: the
+// shared scan flags plus the baseline-only --path flag.
 func baselineScanFlags(cmd *cobra.Command) {
-	f := cmd.Flags()
-	f.String("config", ".llmlint.yaml", "config file path (relative to repo root)")
-	f.String("baseline", "", "baseline file path (default: .llmlint-baseline.yaml)")
-	f.Bool("no-git", false, "skip git history scan")
-	f.String("since", "", "only scan commits since this git ref/sha")
-	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
-	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
-	f.String("path", ".", "repo root to scan (default: current dir)")
+	sharedScanFlags(cmd)
+	cmd.Flags().String("path", ".", "repo root to scan (default: current dir)")
 }
 
 func newBaselineCreateCmd(name string) *cobra.Command {
@@ -91,35 +85,21 @@ func loadResult(cmd *cobra.Command) (*engine.Result, string, *config.Config, err
 	if path == "" {
 		path = "."
 	}
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath, path)
-	if err != nil {
-		return nil, "", nil, err
-	}
-	include, _ := cmd.Flags().GetStringSlice("include")
-	exclude, _ := cmd.Flags().GetStringSlice("exclude")
-	noGit, _ := cmd.Flags().GetBool("no-git")
-	since, _ := cmd.Flags().GetString("since")
-	baselineFlag, _ := cmd.Flags().GetString("baseline")
-	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes:     include,
-		Excludes:     exclude,
-		NoGit:        noGit,
-		Since:        since,
-		BaselinePath: baselineFlag,
+	setup, err := newScanSetup(cmd, path, config.CLIOverrides{
 		// Don't auto-load the baseline during baseline subcommands —
 		// they want the raw current findings, not the post-baseline view.
 		NoBaseline: true,
-	}); err != nil {
-		return nil, "", nil, err
-	}
-
-	res, err := engine.New(rules.DefaultRegistry(), cfg).Run(path)
+	})
 	if err != nil {
 		return nil, "", nil, err
 	}
-	bp := baseline.ResolvePath(cfg.BaselinePath(), path)
-	return res, bp, cfg, nil
+
+	res, err := setup.eng.RunContext(cmd.Context(), path)
+	if err != nil {
+		return nil, "", nil, err
+	}
+	bp := baseline.ResolvePath(setup.cfg.BaselinePath(), path)
+	return res, bp, setup.cfg, nil
 }
 
 func runBaselineCreate(cmd *cobra.Command, force bool) error {
@@ -192,7 +172,7 @@ func runBaselineStatus(cmd *cobra.Command, _ []string) error {
 }
 
 func runBaselinePrune(cmd *cobra.Command, _ []string) error {
-	res, bp, cfg, err := loadResult(cmd)
+	res, bp, _, err := loadResult(cmd)
 	if err != nil {
 		return err
 	}
@@ -232,6 +212,5 @@ func runBaselinePrune(cmd *cobra.Command, _ []string) error {
 
 	_, _ = fmt.Fprintf(cmd.OutOrStdout(), "pruned %d stale entries from %s; %d remain\n",
 		len(stats.Stale), bp, len(kept))
-	_ = cfg
 	return nil
 }

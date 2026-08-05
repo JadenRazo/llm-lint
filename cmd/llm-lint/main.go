@@ -14,9 +14,9 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/config"
 	"github.com/JadenRazo/llm-lint/internal/engine"
 	"github.com/JadenRazo/llm-lint/internal/fixer"
-	"github.com/JadenRazo/llm-lint/internal/progress"
 	"github.com/JadenRazo/llm-lint/internal/report"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
@@ -88,24 +88,18 @@ func newScanCmd() *cobra.Command {
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runScan,
 	}
+	sharedScanFlags(cmd)
 	f := cmd.Flags()
-	f.String("config", ".llmlint.yaml", "config file path (relative to repo root)")
 	f.String("format", "human", "output format: human|json|sarif|github (auto-detects to github when GITHUB_ACTIONS=true)")
 	f.String("output", "-", "output file or '-' for stdout")
 	f.String("fail-on", "", "exit non-zero if any finding is at or above this severity (error|warning|info|none) (default: config file's fail_on or \"error\")")
-	f.Bool("no-git", false, "skip git history scan")
 	f.Bool("no-color", false, "disable ANSI color")
-	f.Bool("no-progress", false, "disable the live progress line on stderr")
-	f.String("since", "", "only scan commits since this git ref/sha")
 	f.Bool("staged-only", false, "scan files staged in the git index instead of the working tree (skips trailer/message rules)")
-	f.String("baseline", "", "baseline file path (default: .llmlint-baseline.yaml if present)")
 	f.Bool("no-baseline", false, "ignore baseline file even if present")
 	f.Bool("baseline-stale-fail", false, "exit non-zero if the baseline has stale entries")
 	f.Bool("fix", false, "apply safe automatic fixes before reporting remaining findings")
 	f.Bool("fix-preview", false, "preview safe automatic fixes without modifying files, index, or git history")
 	f.String("fix-git-history", "", "with --fix/--fix-preview, rewrite commit messages: none|latest|scanned (default: config fix.git_history or latest)")
-	f.StringSlice("include", nil, "force-enable rule IDs (repeatable)")
-	f.StringSlice("exclude", nil, "disable rule IDs (repeatable)")
 	f.Bool("pr-comment", false, "post a sticky PR comment with findings (requires --format github and GITHUB_TOKEN)")
 	f.String("pr-comment-mode", "sticky", "PR comment mode: sticky|append")
 	f.String("gh-token", "", "GitHub token (overrides GITHUB_TOKEN; never logged)")
@@ -121,17 +115,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	cfgPath, _ := cmd.Flags().GetString("config")
-	cfg, err := config.Load(cfgPath, path)
-	if err != nil {
-		return err
-	}
-	include, _ := cmd.Flags().GetStringSlice("include")
-	exclude, _ := cmd.Flags().GetStringSlice("exclude")
-	noGit, _ := cmd.Flags().GetBool("no-git")
-	since, _ := cmd.Flags().GetString("since")
 	stagedOnly, _ := cmd.Flags().GetBool("staged-only")
-	baselinePath, _ := cmd.Flags().GetString("baseline")
 	noBaseline, _ := cmd.Flags().GetBool("no-baseline")
 	baselineStaleFail, _ := cmd.Flags().GetBool("baseline-stale-fail")
 	fix, _ := cmd.Flags().GetBool("fix")
@@ -147,19 +131,16 @@ func runScan(cmd *cobra.Command, args []string) error {
 	if !runFix && fixGitHistory != "" {
 		return fmt.Errorf("--fix-git-history requires --fix or --fix-preview")
 	}
-	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes:          include,
-		Excludes:          exclude,
-		NoGit:             noGit,
-		Since:             since,
+	setup, err := newScanSetup(cmd, path, config.CLIOverrides{
 		StagedOnly:        stagedOnly,
-		BaselinePath:      baselinePath,
 		NoBaseline:        noBaseline,
 		BaselineStaleFail: baselineStaleFail,
 		FixGitHistory:     fixGitHistory,
-	}); err != nil {
+	})
+	if err != nil {
 		return err
 	}
+	cfg := setup.cfg
 
 	// Resolve effective --fail-on: CLI flag wins, then config-file fail_on,
 	// then the default "error" baked into config.Load. Empty flag default
@@ -174,12 +155,8 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	noProgress, _ := cmd.Flags().GetBool("no-progress")
-	prog := progress.New(os.Stderr, !noProgress)
-
 	ctx := cmd.Context()
-	eng := engine.New(rules.DefaultRegistry(), cfg).WithProgress(prog)
-	res, err := eng.RunContext(ctx, path)
+	res, err := setup.eng.RunContext(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -200,7 +177,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if !fixPreview {
-			res, err = eng.RunContext(ctx, path)
+			res, err = setup.eng.RunContext(ctx, path)
 			if err != nil {
 				return err
 			}
@@ -275,19 +252,11 @@ func newRulesCmd() *cobra.Command {
 			fmt.Printf("Category:    %s\n", r.Category)
 			fmt.Printf("Kind:        %s\n", r.Kind)
 			fmt.Printf("\nDescription:\n  %s\n", r.Description)
-			fmt.Printf("\nRemediation:\n%s\n", indentText(r.Remediation, "  "))
+			fmt.Printf("\nRemediation:\n%s\n", textutil.Indent(r.Remediation, "  "))
 			return nil
 		},
 	})
 	return cmd
-}
-
-func indentText(s, pad string) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	for i, l := range lines {
-		lines[i] = pad + l
-	}
-	return strings.Join(lines, "\n")
 }
 
 func writeFixSummary(w *os.File, summary fixer.Summary, preview bool) error {

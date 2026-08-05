@@ -5,6 +5,8 @@
   },
   "scanned": {
     "files": 42,
+    "files_walked": 57,
+    "bytes_read": 12345,
     "commits": 7,
     "duration_ms": 0
   },

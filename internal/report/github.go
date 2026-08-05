@@ -12,6 +12,7 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/engine"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 // FormatGitHub emits GitHub Actions workflow command annotations on stdout
@@ -379,10 +380,7 @@ func buildSummaryMarkdown(res *engine.Result, version string) string {
 		b.WriteString("\n### Commit findings\n\n")
 		b.WriteString("These don't surface as inline annotations.\n\n")
 		for _, f := range commitFindings {
-			sha := f.Location.CommitSHA
-			if len(sha) > 7 {
-				sha = sha[:7]
-			}
+			sha := textutil.ShortSHA(f.Location.CommitSHA)
 			fmt.Fprintf(&b, "- `%s` %s — `%s` (%s)\n",
 				sha, f.Title,
 				escapeMarkdownCell(f.Location.CommitMsg),

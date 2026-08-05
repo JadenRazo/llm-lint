@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -163,7 +162,7 @@ func (s *Scanner) ScanWithProgress(ctx context.Context, root string, prog *progr
 	}
 
 	errCb := walker.WithErrorCallback(func(_ string, err error) error {
-		if errors_isPermission(err) || errors_isNotExist(err) {
+		if os.IsPermission(err) || os.IsNotExist(err) {
 			return nil
 		}
 		return err
@@ -256,8 +255,3 @@ func applySeverity(r rules.Rule, cfg Config) rules.Rule {
 	r.Severity = cfg.EffectiveSeverity(r.ID, r.Severity)
 	return r
 }
-
-func errors_isPermission(err error) bool { return os.IsPermission(err) }
-func errors_isNotExist(err error) bool   { return os.IsNotExist(err) }
-
-var _ = fs.ModeSymlink
