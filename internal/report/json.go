@@ -35,12 +35,14 @@ type toolInfo struct {
 }
 
 type scannedInfo struct {
-	Files          int64 `json:"files"`
-	Commits        int   `json:"commits"`
-	DurationMS     int64 `json:"duration_ms"`
-	GitShallow     bool  `json:"git_shallow,omitempty"`
-	GitSkipped     bool  `json:"git_skipped,omitempty"`
-	GitSkippedNote string `json:"git_skipped_note,omitempty"`
+	Files           int64  `json:"files"`
+	FilesUnreadable int64  `json:"files_unreadable,omitempty"`
+	Commits         int    `json:"commits"`
+	DurationMS      int64  `json:"duration_ms"`
+	GitShallow      bool   `json:"git_shallow,omitempty"`
+	GitSkipped      bool   `json:"git_skipped,omitempty"`
+	GitSkippedNote  string `json:"git_skipped_note,omitempty"`
+	SinceUnresolved string `json:"since_unresolved,omitempty"`
 }
 
 func (r *JSONReporter) Write(res *engine.Result) error {
@@ -50,12 +52,14 @@ func (r *JSONReporter) Write(res *engine.Result) error {
 	out := jsonOutput{
 		Tool: toolInfo{Name: "llm-lint", Version: r.opts.Version},
 		Scanned: scannedInfo{
-			Files:          res.FilesScanned,
-			Commits:        res.CommitsScanned,
-			DurationMS:     res.DurationMS,
-			GitShallow:     res.GitShallow,
-			GitSkipped:     res.GitSkipped,
-			GitSkippedNote: res.GitSkippedNote,
+			Files:           res.FilesScanned,
+			FilesUnreadable: res.FilesUnreadable,
+			Commits:         res.CommitsScanned,
+			DurationMS:      res.DurationMS,
+			GitShallow:      res.GitShallow,
+			GitSkipped:      res.GitSkipped,
+			GitSkippedNote:  res.GitSkippedNote,
+			SinceUnresolved: res.SinceUnresolved,
 		},
 		Findings: res.Findings,
 		Summary:  res.Summary,

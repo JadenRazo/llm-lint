@@ -28,13 +28,18 @@ type Reporter interface {
 }
 
 func New(format string, opts Options) (Reporter, error) {
+	// Validate the format before opening (and truncating) the output file,
+	// so `--format bogus --output existing.sarif` cannot zero out a report.
+	switch Format(format) {
+	case FormatHuman, "", FormatJSON, FormatSARIF, FormatGitHub:
+	default:
+		return nil, fmt.Errorf("unknown format %q (want human|json|sarif|github)", format)
+	}
 	w, closer, err := openOutput(opts.Output)
 	if err != nil {
 		return nil, err
 	}
 	switch Format(format) {
-	case FormatHuman, "":
-		return &HumanReporter{w: w, closer: closer, opts: opts}, nil
 	case FormatJSON:
 		return &JSONReporter{w: w, closer: closer, opts: opts}, nil
 	case FormatSARIF:
@@ -42,10 +47,7 @@ func New(format string, opts Options) (Reporter, error) {
 	case FormatGitHub:
 		return newGitHubReporter(w, closer, opts), nil
 	default:
-		if closer != nil {
-			closer.Close()
-		}
-		return nil, fmt.Errorf("unknown format %q (want human|json|sarif|github)", format)
+		return &HumanReporter{w: w, closer: closer, opts: opts}, nil
 	}
 }
 

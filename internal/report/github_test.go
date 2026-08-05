@@ -75,11 +75,11 @@ func TestAnnotationLevel(t *testing.T) {
 
 func TestAutoDetectFormat(t *testing.T) {
 	cases := []struct {
-		name           string
-		envVal         string
-		formatChanged  bool
-		current        string
-		want           string
+		name          string
+		envVal        string
+		formatChanged bool
+		current       string
+		want          string
 	}{
 		{"in-actions, no flag, defaults to github", "true", false, "human", "github"},
 		{"in-actions, user passed flag, respects user", "true", true, "json", "json"},

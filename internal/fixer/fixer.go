@@ -182,7 +182,7 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 
 	head, err := gitOutput(root, "rev-parse", "HEAD")
 	if err != nil {
-		return 0, 0, lenCommitTargets(targets), nil
+		return 0, 0, lenCommitTargets(targets), fmt.Errorf("resolve HEAD: %w", err)
 	}
 	head = strings.TrimSpace(head)
 
@@ -230,7 +230,7 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, preview bool) (int, int, int, error) {
 	oldHead, err := gitOutput(root, "rev-parse", "HEAD")
 	if err != nil {
-		return 0, 0, lenCommitTargets(targets), nil
+		return 0, 0, lenCommitTargets(targets), fmt.Errorf("resolve HEAD: %w", err)
 	}
 	oldHead = strings.TrimSpace(oldHead)
 

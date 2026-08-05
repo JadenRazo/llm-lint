@@ -20,6 +20,11 @@ func (s Severity) Rank() int {
 	return 0
 }
 
+// Valid reports whether s is one of the known severities. A zero-Rank
+// severity would silently fall outside every summary bucket and threshold,
+// so config validation rejects it up front.
+func (s Severity) Valid() bool { return s.Rank() > 0 }
+
 type Category string
 
 const (
@@ -32,6 +37,24 @@ const (
 	CatWindsurf Category = "windsurf"
 	CatGeneric  Category = "generic"
 )
+
+// AllCategories lists every known category, for config validation and docs.
+func AllCategories() []Category {
+	return []Category{
+		CatClaude, CatCursor, CatCopilot, CatAider,
+		CatContinue, CatCodeium, CatWindsurf, CatGeneric,
+	}
+}
+
+// ValidCategory reports whether c is a known category.
+func ValidCategory(c Category) bool {
+	for _, k := range AllCategories() {
+		if c == k {
+			return true
+		}
+	}
+	return false
+}
 
 type Kind string
 

@@ -34,6 +34,10 @@ type Stats struct {
 	FilesWalked  int64
 	FilesScanned int64
 	BytesRead    int64
+	// FilesUnreadable counts files that matched the scan filters but could
+	// not be read. Surfaced in reports so an unreadable file is
+	// distinguishable from a clean one.
+	FilesUnreadable int64
 }
 
 type Scanner struct {
@@ -113,6 +117,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 
 		rel, err := filepath.Rel(absRoot, path)
 		if err != nil {
+			atomic.AddInt64(&stats.FilesUnreadable, 1)
 			return nil
 		}
 		rel = filepath.ToSlash(rel)
@@ -137,7 +142,10 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		}
 
 		if len(s.contentRules) > 0 && info.Size() <= maxContentSize {
-			contentMatches, n := s.scanContent(path, rel, info.Size())
+			contentMatches, n, readErr := s.scanContent(path, rel, info.Size())
+			if readErr != nil {
+				atomic.AddInt64(&stats.FilesUnreadable, 1)
+			}
 			fileMatches = append(fileMatches, contentMatches...)
 			atomic.AddInt64(&stats.BytesRead, n)
 		}
@@ -163,15 +171,15 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 	return matches, stats, nil
 }
 
-func (s *Scanner) scanContent(absPath, rel string, size int64) ([]rules.Match, int64) {
+func (s *Scanner) scanContent(absPath, rel string, size int64) ([]rules.Match, int64, error) {
 	if size == 0 {
-		return nil, 0
+		return nil, 0, nil
 	}
 	data, err := os.ReadFile(absPath)
 	if err != nil {
-		return nil, 0
+		return nil, 0, err
 	}
-	return s.applyContentRules(rel, data), int64(len(data))
+	return s.applyContentRules(rel, data), int64(len(data)), nil
 }
 
 // applyContentRules runs the compiled content-rule regex set against an
@@ -208,7 +216,10 @@ func (s *Scanner) applyContentRules(rel string, data []byte) []rules.Match {
 
 func matchesAnyGlob(rel string, globs []string) bool {
 	for _, g := range globs {
-		ok, err := doublestar.PathMatch(g, rel)
+		// Match (not PathMatch): rel is slash-normalized, and PathMatch
+		// splits on the OS separator, which breaks Windows. Built-in rule
+		// globs are compile-time constants, so the error path is dead.
+		ok, err := doublestar.Match(g, rel)
 		if err == nil && ok {
 			return true
 		}

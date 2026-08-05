@@ -97,7 +97,7 @@ func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{
-		Includes: []string{"LLM099"},
+		Includes: []string{"LLM002"},
 		Excludes: []string{"LLM001"},
 	}); err != nil {
 		t.Fatal(err)
@@ -105,8 +105,21 @@ func TestApplyCLIOverrides_IncludeExclude(t *testing.T) {
 	if cfg.IsRuleEnabled("LLM001") {
 		t.Error("LLM001 should be excluded")
 	}
-	if !cfg.IsRuleEnabled("LLM099") {
-		t.Error("LLM099 should be force-included")
+	if !cfg.IsRuleEnabled("LLM002") {
+		t.Error("LLM002 should be force-included")
+	}
+}
+
+func TestApplyCLIOverrides_UnknownRuleIDs(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{Includes: []string{"LLM099"}}); err == nil {
+		t.Error("unknown rule id in --include should error")
+	}
+	if err := cfg.ApplyCLIOverrides(config.CLIOverrides{Excludes: []string{"NOPE"}}); err == nil {
+		t.Error("unknown rule id in --exclude should error")
 	}
 }
 
@@ -256,5 +269,48 @@ categories:
 	}
 	if cfg.IsRuleEnabled("LLM006") {
 		t.Error("cursor category rule should be filtered out when only claude is in categories")
+	}
+}
+
+func writeCfg(t *testing.T, content string) string {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, ".llmlint.yaml"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestLoad_StrictValidation(t *testing.T) {
+	cases := []struct {
+		name string
+		yaml string
+	}{
+		{"unknown top-level key", "ignroe:\n  - vendor/**\n"},
+		{"unknown rule id", "rules:\n  LLM099:\n    enabled: false\n"},
+		{"unknown category", "categories:\n  - claud\n"},
+		{"invalid rule severity", "rules:\n  LLM001:\n    severity: critical\n"},
+		{"invalid fail_on", "fail_on: fatal\n"},
+		{"unsupported version", "version: 99\n"},
+		{"invalid ignore glob", "ignore:\n  - \"a[\"\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := writeCfg(t, tc.yaml)
+			if _, err := config.Load(".llmlint.yaml", dir); err == nil {
+				t.Errorf("config %q should be rejected", tc.yaml)
+			}
+		})
+	}
+}
+
+func TestLoad_ValidConfigStillLoads(t *testing.T) {
+	dir := writeCfg(t, "version: 1\ncategories:\n  - claude\nrules:\n  LLM001:\n    severity: warning\nfail_on: warning\nignore:\n  - vendor/**\n")
+	cfg, err := config.Load(".llmlint.yaml", dir)
+	if err != nil {
+		t.Fatalf("valid config rejected: %v", err)
+	}
+	if got := cfg.EffectiveSeverity("LLM001", rules.SevError); got != rules.SevWarning {
+		t.Errorf("severity override not applied: %v", got)
 	}
 }

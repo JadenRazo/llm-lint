@@ -5,9 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/JadenRazo/llm-lint/internal/gitscan"
-	"github.com/JadenRazo/llm-lint/internal/rules"
-
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
 
@@ -28,7 +25,7 @@ func TestGitScan_MalformedHEAD_NoPanic(t *testing.T) {
 	}
 
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("gitscan must not panic on malformed HEAD; got panic: %v", r)
@@ -45,7 +42,7 @@ func TestGitScan_GitDirIsAFile_GracefulError(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	defer func() {
 		if r := recover(); r != nil {
 			t.Errorf("gitscan must not panic when .git is a malformed gitfile; got panic: %v", r)
@@ -75,7 +72,7 @@ func TestGitScan_NoCommits_EmptyResult(t *testing.T) {
 	}
 
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		// An error here is acceptable — go-git's behavior on a bare .git skeleton
