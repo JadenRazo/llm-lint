@@ -6,6 +6,7 @@ import (
 
 	"github.com/owenrumney/go-sarif/v2/sarif"
 
+	"github.com/JadenRazo/llm-lint/internal/baseline"
 	"github.com/JadenRazo/llm-lint/internal/engine"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
@@ -18,6 +19,18 @@ type SARIFReporter struct {
 	opts   Options
 }
 
+// rulesHelpURI is where every rule's helpUri points; individual rule docs
+// are anchors under the README's Rules section.
+const rulesHelpURI = "https://github.com/JadenRazo/llm-lint#rules"
+
+// automationID identifies llm-lint runs in SARIF consumers that group
+// results by runAutomationDetails (e.g. GitHub code scanning categories).
+const automationID = "llm-lint/scan"
+
+// fingerprintKey names the partialFingerprints entry. Versioned so the
+// hashing scheme can evolve without colliding with old uploads.
+const fingerprintKey = "llmLint/v1"
+
 func (r *SARIFReporter) Write(res *engine.Result) error {
 	if r.closer != nil {
 		defer r.closer.Close()
@@ -29,6 +42,7 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 	}
 	run := sarif.NewRunWithInformationURI("llm-lint", "https://github.com/JadenRazo/llm-lint")
 	run.Tool.Driver.WithVersion(r.opts.Version)
+	run.WithAutomationDetails(sarif.NewRunAutomationDetails().WithID(automationID))
 
 	added := map[string]bool{}
 	for _, f := range res.Findings {
@@ -39,8 +53,14 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 				WithShortDescription(sarif.NewMultiformatMessageString(f.Title)).
 				WithFullDescription(sarif.NewMultiformatMessageString(f.Description)).
 				WithHelp(sarif.NewMultiformatMessageString(f.Remediation)).
+				WithHelpURI(rulesHelpURI).
 				WithDefaultConfiguration(sarif.NewReportingConfiguration().WithLevel(sarifLevel(f.Severity))).
-				WithProperties(sarif.Properties{"category": string(f.Category)})
+				WithProperties(sarif.Properties{
+					"category": string(f.Category),
+					// GitHub code scanning reads security-severity to
+					// bucket alerts (critical/high/medium/low).
+					"security-severity": securitySeverity(f.Severity),
+				})
 		}
 	}
 
@@ -53,6 +73,12 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 			WithLevel(sarifLevel(f.Severity)).
 			WithMessage(sarif.NewTextMessage(f.Title)).
 			WithBaselineState(baselineState)
+
+		// Stable identity across runs: same hash the baseline uses, so a
+		// finding tracked in code scanning survives line shifts and re-runs.
+		if fp := baseline.Fingerprint(f); fp != "" {
+			result.WithPartialFingerPrints(map[string]interface{}{fingerprintKey: fp})
+		}
 
 		if f.Location.Kind == findings.LocFile && f.Location.Path != "" {
 			region := sarif.NewSimpleRegion(maxInt(f.Location.Line, 1), maxInt(f.Location.Line, 1))
@@ -79,6 +105,20 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 
 	report.AddRun(run)
 	return report.PrettyWrite(r.w)
+}
+
+// securitySeverity maps llm-lint severities onto the 0-10 scale GitHub
+// code scanning expects in rule properties (as a string).
+func securitySeverity(s rules.Severity) string {
+	switch s {
+	case rules.SevError:
+		return "8.0"
+	case rules.SevWarning:
+		return "5.0"
+	case rules.SevInfo:
+		return "3.0"
+	}
+	return "0.0"
 }
 
 func sarifLevel(s rules.Severity) string {

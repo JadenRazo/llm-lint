@@ -11,6 +11,10 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/report"
 	"github.com/JadenRazo/llm-lint/internal/rules"
 	"github.com/JadenRazo/llm-lint/internal/testutil"
+
+	// Register built-in rules so baseline.Fingerprint (used for SARIF
+	// partialFingerprints) resolves the fixture's rule IDs.
+	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
 
 // fixedResult is the canonical fixture for reporter golden comparisons.
@@ -89,8 +93,9 @@ func fixedResult() *engine.Result {
 // We keep enough of the document that schema validation in TestSARIF_Validates
 // still proves correctness; this only blanks the non-deterministic bits.
 func normalizeSARIF(b []byte) []byte {
+	// automationDetails is deterministic now that the reporter pins its id,
+	// so only the run-level GUIDs need blanking.
 	patterns := []*regexp.Regexp{
-		regexp.MustCompile(`"automationDetails":\s*\{[^}]*\}`),
 		regexp.MustCompile(`"guid":\s*"[0-9a-fA-F-]+"`),
 		regexp.MustCompile(`"runGuid":\s*"[0-9a-fA-F-]+"`),
 	}
