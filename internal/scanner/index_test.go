@@ -2,6 +2,7 @@ package scanner_test
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"sort"
@@ -55,7 +56,7 @@ func runIndex(t *testing.T, root string, cfg scanner.Config) []rules.Match {
 	if err != nil {
 		t.Fatal(err)
 	}
-	matches, _, err := s.ScanIndex(root, nil)
+	matches, _, err := s.ScanIndex(context.Background(), root, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestScanIndex_NotARepo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := s.ScanIndex(dir, nil); err == nil {
+	if _, _, err := s.ScanIndex(context.Background(), dir, nil); err == nil {
 		t.Errorf("expected error on non-git dir")
 	}
 }
@@ -180,7 +181,7 @@ func TestScanIndex_BareRepoRefused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = s.ScanIndex(dir, nil)
+	_, _, err = s.ScanIndex(context.Background(), dir, nil)
 	if err == nil || !strings.Contains(err.Error(), "bare") {
 		t.Errorf("bare repo should error mentioning 'bare'; got %v", err)
 	}

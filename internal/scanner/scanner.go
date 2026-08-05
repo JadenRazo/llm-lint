@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
@@ -28,6 +29,9 @@ type Config interface {
 	IsRuleEnabled(id string) bool
 	EffectiveSeverity(id string, def rules.Severity) rules.Severity
 	IsIgnored(relPath string) bool
+	// IsIgnoredDir reports whether a whole directory can be pruned
+	// (e.g. "vendor/**" prunes the vendor directory itself).
+	IsIgnoredDir(relDir string) bool
 }
 
 type Stats struct {
@@ -73,10 +77,10 @@ func New(cfg Config, allRules map[string]rules.Rule) (*Scanner, error) {
 }
 
 func (s *Scanner) Scan(root string) ([]rules.Match, Stats, error) {
-	return s.ScanWithProgress(root, nil)
+	return s.ScanWithProgress(context.Background(), root, nil)
 }
 
-func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
+func (s *Scanner) ScanWithProgress(ctx context.Context, root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
 	var stats Stats
 	var (
 		mu      sync.Mutex
@@ -98,7 +102,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 			}
 			rel, _ := filepath.Rel(absRoot, path)
 			relSlash := filepath.ToSlash(rel)
-			if rel != "." && s.cfg.IsIgnored(relSlash+"/") {
+			if rel != "." && s.cfg.IsIgnoredDir(relSlash) {
 				return filepath.SkipDir
 			}
 			if gi.match(relSlash, true) {
@@ -165,7 +169,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		return err
 	})
 
-	if err := walker.Walk(absRoot, walkFn, errCb); err != nil {
+	if err := walker.WalkWithContext(ctx, absRoot, walkFn, errCb); err != nil {
 		return nil, stats, err
 	}
 	return matches, stats, nil

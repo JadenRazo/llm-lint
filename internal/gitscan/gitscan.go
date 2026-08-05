@@ -1,6 +1,7 @@
 package gitscan
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -82,10 +83,10 @@ func compileRule(r rules.Rule, patterns []string) (compiledRule, error) {
 }
 
 func (s *Scanner) Scan(root string) (*Result, error) {
-	return s.ScanWithProgress(root, nil)
+	return s.ScanWithProgress(context.Background(), root, nil)
 }
 
-func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) (*Result, error) {
+func (s *Scanner) ScanWithProgress(ctx context.Context, root string, prog *progress.Reporter) (*Result, error) {
 	gitDir := filepath.Join(root, ".git")
 	if _, err := os.Stat(gitDir); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -137,6 +138,9 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) (*Resul
 	scanned := 0
 	prog.SetCommits(0, depth)
 	err = iter.ForEach(func(c *object.Commit) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if sinceHash != nil && c.Hash == *sinceHash {
 			return errStopIter
 		}

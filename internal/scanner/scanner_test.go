@@ -34,6 +34,10 @@ func (c *testCfg) IsIgnored(rel string) bool {
 	return false
 }
 
+func (c *testCfg) IsIgnoredDir(rel string) bool {
+	return c.IsIgnored(rel + "/")
+}
+
 func writeFiles(t *testing.T, root string, files map[string]string) {
 	t.Helper()
 	for rel, content := range files {

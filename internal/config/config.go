@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"sigs.k8s.io/yaml"
@@ -303,6 +304,29 @@ func (c *Config) EffectiveSeverity(id string, def rules.Severity) rules.Severity
 		return ov.Severity
 	}
 	return def
+}
+
+// IsIgnoredDir reports whether an entire directory can be pruned from the
+// walk. A pattern like "vendor/**" means "everything under vendor/", so the
+// directory "vendor" itself is prunable even though the pattern does not
+// match the bare string "vendor" (or "vendor/"). Without this, default
+// ignores like node_modules/** were filtered file-by-file after walking the
+// whole subtree.
+func (c *Config) IsIgnoredDir(relDir string) bool {
+	relDir = strings.TrimSuffix(relDir, "/")
+	if c.IsIgnored(relDir) || c.IsIgnored(relDir+"/") {
+		return true
+	}
+	for _, pat := range c.Ignore {
+		base, found := strings.CutSuffix(pat, "/**")
+		if !found {
+			continue
+		}
+		if ok, _ := doublestar.Match(base, relDir); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) IsIgnored(relPath string) bool {

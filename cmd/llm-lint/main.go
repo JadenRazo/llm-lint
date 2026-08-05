@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/spf13/cobra"
 
@@ -39,7 +42,12 @@ type exitCodeError struct {
 func (e *exitCodeError) Error() string { return e.msg }
 
 func main() {
-	err := newRoot().Execute()
+	// Ctrl-C cancels the context, which stops walkers, git iteration, and
+	// any in-flight git subprocess (CommandContext) instead of leaving a
+	// half-rewritten history behind.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	err := newRoot().ExecuteContext(ctx)
+	stop()
 	if err == nil {
 		os.Exit(exitOK)
 	}
@@ -169,13 +177,14 @@ func runScan(cmd *cobra.Command, args []string) error {
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	prog := progress.New(os.Stderr, !noProgress)
 
+	ctx := cmd.Context()
 	eng := engine.New(rules.DefaultRegistry(), cfg).WithProgress(prog)
-	res, err := eng.Run(path)
+	res, err := eng.RunContext(ctx, path)
 	if err != nil {
 		return err
 	}
 	if runFix {
-		summary, err := fixer.ApplyWithOptions(path, res.Findings, rules.DefaultRegistry(), fixer.Options{
+		summary, err := fixer.ApplyWithOptions(ctx, path, res.Findings, rules.DefaultRegistry(), fixer.Options{
 			GitHistoryMode: cfg.FixGitHistory(),
 			Preview:        fixPreview,
 		})
@@ -191,7 +200,7 @@ func runScan(cmd *cobra.Command, args []string) error {
 			}
 		}
 		if !fixPreview {
-			res, err = eng.Run(path)
+			res, err = eng.RunContext(ctx, path)
 			if err != nil {
 				return err
 			}

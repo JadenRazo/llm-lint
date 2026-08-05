@@ -184,7 +184,7 @@ func appendCanonicalEntry(existing, rev string) string {
 		existing += "\n"
 	}
 	// If the file lacks a top-level `repos:` key, write a fresh minimal config.
-	if !regexp.MustCompile(`(?m)^repos\s*:`).MatchString(existing) {
+	if !reposKeyRe.MatchString(existing) {
 		return existing + minimalFrameworkConfig(rev)
 	}
 	block := fmt.Sprintf(`  - repo: %s
@@ -203,6 +203,10 @@ var llmLintBlockRe = regexp.MustCompile(
 
 // revLineRe matches a `rev:` line anywhere; the caller bounds the search.
 var revLineRe = regexp.MustCompile(`(?m)^(\s*rev\s*:\s*)\S+(\s*)$`)
+
+var reposKeyRe = regexp.MustCompile(`(?m)^repos\s*:`)
+
+var siblingRepoRe = regexp.MustCompile(`^\s*-\s+repo\s*:`)
 
 // replaceRev surgically replaces the rev: value within the llm-lint block.
 // Returns (new, true) on success, ("", false) if the structure is unusual
@@ -244,10 +248,9 @@ func removeLLMLintEntry(content string) (string, bool) {
 // as the one starting at `from`, or EOF.
 func nextSiblingRepoOrEOF(content string, from int) int {
 	lines := strings.SplitAfter(content[from:], "\n")
-	siblingRe := regexp.MustCompile(`^\s*-\s+repo\s*:`)
 	pos := from
 	for _, ln := range lines {
-		if siblingRe.MatchString(ln) {
+		if siblingRepoRe.MatchString(ln) {
 			return pos
 		}
 		pos += len(ln)

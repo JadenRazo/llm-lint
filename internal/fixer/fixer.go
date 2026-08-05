@@ -2,6 +2,7 @@ package fixer
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
@@ -42,10 +44,10 @@ func (s Summary) Empty() bool {
 }
 
 func Apply(root string, fs []findings.Finding, allRules map[string]rules.Rule) (Summary, error) {
-	return ApplyWithOptions(root, fs, allRules, Options{GitHistoryMode: string(GitHistoryLatest)})
+	return ApplyWithOptions(context.Background(), root, fs, allRules, Options{GitHistoryMode: string(GitHistoryLatest)})
 }
 
-func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]rules.Rule, opts Options) (Summary, error) {
+func ApplyWithOptions(ctx context.Context, root string, fs []findings.Finding, allRules map[string]rules.Rule, opts Options) (Summary, error) {
 	absRoot, err := filepath.Abs(root)
 	if err != nil {
 		return Summary{}, err
@@ -96,7 +98,7 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 		}
 	}
 
-	commitMessages, commitLinesRemoved, unfixable, err := fixCommitMessages(absRoot, commitTargets, mode, opts.Preview)
+	commitMessages, commitLinesRemoved, unfixable, err := fixCommitMessages(ctx, absRoot, commitTargets, mode, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
@@ -120,7 +122,7 @@ func ApplyWithOptions(root string, fs []findings.Finding, allRules map[string]ru
 		summary.GitignoreAdded = added
 	}
 
-	fixed, err := untrack(absRoot, untrackPaths, opts.Preview)
+	fixed, err := untrack(ctx, absRoot, untrackPaths, opts.Preview)
 	if err != nil {
 		return summary, err
 	}
@@ -166,7 +168,7 @@ func removeContentLines(root string, targets map[string]map[int][]rules.Rule, pr
 	return changedFiles, removedLines, nil
 }
 
-func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHistoryMode, preview bool) (int, int, int, error) {
+func fixCommitMessages(ctx context.Context, root string, targets map[string][]rules.Rule, mode GitHistoryMode, preview bool) (int, int, int, error) {
 	if len(targets) == 0 {
 		return 0, 0, 0, nil
 	}
@@ -177,10 +179,10 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 		return 0, 0, lenCommitTargets(targets), nil
 	}
 	if mode == GitHistoryScanned {
-		return rewriteScannedCommitMessages(root, targets, preview)
+		return rewriteScannedCommitMessages(ctx, root, targets, preview)
 	}
 
-	head, err := gitOutput(root, "rev-parse", "HEAD")
+	head, err := gitOutput(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return 0, 0, lenCommitTargets(targets), fmt.Errorf("resolve HEAD: %w", err)
 	}
@@ -199,7 +201,7 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 		return 0, 0, unfixable, nil
 	}
 
-	msg, err := gitOutput(root, "log", "-1", "--format=%B")
+	msg, err := gitOutput(ctx, root, "log", "-1", "--format=%B")
 	if err != nil {
 		return 0, 0, unfixable, err
 	}
@@ -210,31 +212,31 @@ func fixCommitMessages(root string, targets map[string][]rules.Rule, mode GitHis
 	if strings.TrimSpace(cleaned) == "" {
 		return 0, 0, unfixable, fmt.Errorf("refusing to auto-fix HEAD commit message to empty")
 	}
-	meta, err := loadCommitMeta(root, "HEAD")
+	meta, err := loadCommitMeta(ctx, root, "HEAD")
 	if err != nil {
 		return 0, 0, unfixable, err
 	}
 	if preview {
 		return 1, removed, unfixable, nil
 	}
-	newHead, err := createCommit(root, meta, cleaned, strings.Fields(meta.Parents))
+	newHead, err := createCommit(ctx, root, meta, cleaned, strings.Fields(meta.Parents))
 	if err != nil {
 		return 0, 0, unfixable, err
 	}
-	if err := updateHead(root, head, newHead); err != nil {
+	if err := updateHead(ctx, root, head, newHead); err != nil {
 		return 0, 0, unfixable, err
 	}
 	return 1, removed, unfixable, nil
 }
 
-func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, preview bool) (int, int, int, error) {
-	oldHead, err := gitOutput(root, "rev-parse", "HEAD")
+func rewriteScannedCommitMessages(ctx context.Context, root string, targets map[string][]rules.Rule, preview bool) (int, int, int, error) {
+	oldHead, err := gitOutput(ctx, root, "rev-parse", "HEAD")
 	if err != nil {
 		return 0, 0, lenCommitTargets(targets), fmt.Errorf("resolve HEAD: %w", err)
 	}
 	oldHead = strings.TrimSpace(oldHead)
 
-	revList, err := gitOutput(root, "rev-list", "--reverse", "--topo-order", "HEAD")
+	order, metas, err := loadAllCommitMeta(ctx, root)
 	if err != nil {
 		return 0, 0, 0, err
 	}
@@ -243,11 +245,8 @@ func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, 
 	changedCommits, removedLines := 0, 0
 	unfixable := 0
 
-	for _, sha := range strings.Fields(revList) {
-		meta, err := loadCommitMeta(root, sha)
-		if err != nil {
-			return changedCommits, removedLines, unfixable, err
-		}
+	for _, sha := range order {
+		meta := metas[sha]
 		msg := meta.Message
 		cleaned := msg
 		removed := 0
@@ -284,7 +283,7 @@ func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, 
 		newSHA := sha
 		if !preview {
 			var err error
-			newSHA, err = createCommit(root, meta, cleaned, newParents)
+			newSHA, err = createCommit(ctx, root, meta, cleaned, newParents)
 			if err != nil {
 				return changedCommits, removedLines, unfixable, err
 			}
@@ -301,7 +300,7 @@ func rewriteScannedCommitMessages(root string, targets map[string][]rules.Rule, 
 		return changedCommits, removedLines, lenCommitTargets(targets), nil
 	}
 	if newHead != oldHead && !preview {
-		if err := updateHead(root, oldHead, newHead); err != nil {
+		if err := updateHead(ctx, root, oldHead, newHead); err != nil {
 			return changedCommits, removedLines, unfixable, err
 		}
 	}
@@ -340,14 +339,38 @@ func shouldRemoveCommitLine(line string, rs []rules.Rule) bool {
 			patterns = r.TrailerPatterns
 		}
 		for _, p := range patterns {
-			re, err := regexp.Compile(p)
-			if err == nil && re.MatchString(line) {
+			if re := cachedRegexp(p); re != nil && re.MatchString(line) {
 				return true
 			}
 		}
 	}
 	return false
 }
+
+// cachedRegexp compiles p once per process. shouldRemoveLine and
+// shouldRemoveCommitLine run per line of every target file/commit message,
+// so compiling inline made the fixer O(lines x patterns) compilations.
+// Invalid patterns cache as nil, preserving the old skip-invalid behavior
+// (rule patterns are compile-time constants, so this path is effectively
+// dead).
+func cachedRegexp(p string) *regexp.Regexp {
+	regexCacheMu.RLock()
+	re, ok := regexCache[p]
+	regexCacheMu.RUnlock()
+	if ok {
+		return re
+	}
+	re, _ = regexp.Compile(p)
+	regexCacheMu.Lock()
+	regexCache[p] = re
+	regexCacheMu.Unlock()
+	return re
+}
+
+var (
+	regexCacheMu sync.RWMutex
+	regexCache   = map[string]*regexp.Regexp{}
+)
 
 type commitMeta struct {
 	Tree           string
@@ -361,19 +384,73 @@ type commitMeta struct {
 	Message        string
 }
 
-func loadCommitMeta(root, sha string) (commitMeta, error) {
-	metaOut, err := gitOutput(root, "show", "-s", "--format=%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI", sha)
+// commitMetaFormat emits 9 NUL-terminated fields per commit: 8 header
+// fields, then the full message. Git forbids NUL bytes in commit messages,
+// so splitting the stream on NUL and consuming a fixed field count per
+// record is unambiguous — including for root commits, whose empty %P would
+// defeat any delimiter-based record separator.
+const commitMetaFormat = "%T%x00%P%x00%an%x00%ae%x00%aI%x00%cn%x00%ce%x00%cI%x00%B%x00"
+
+func loadCommitMeta(ctx context.Context, root, sha string) (commitMeta, error) {
+	out, err := gitOutput(ctx, root, "show", "-s", "--format="+commitMetaFormat, sha)
 	if err != nil {
 		return commitMeta{}, err
 	}
-	parts := strings.Split(strings.TrimRight(metaOut, "\n"), "\x00")
-	if len(parts) != 8 {
+	recs, err := parseNulRecords(out, 9)
+	if err != nil || len(recs) != 1 {
 		return commitMeta{}, fmt.Errorf("unexpected commit metadata for %s", shortSHA(sha))
 	}
-	msg, err := gitOutput(root, "log", "-1", "--format=%B", sha)
+	return newCommitMeta(recs[0]), nil
+}
+
+// loadAllCommitMeta reads metadata for every commit reachable from HEAD in a
+// single git invocation. The previous implementation spawned two git
+// processes per commit, which meant 20k subprocesses on a 10k-commit repo.
+func loadAllCommitMeta(ctx context.Context, root string) ([]string, map[string]commitMeta, error) {
+	out, err := gitOutput(ctx, root, "log", "--reverse", "--topo-order", "--format=%H%x00"+commitMetaFormat, "HEAD")
 	if err != nil {
-		return commitMeta{}, err
+		return nil, nil, err
 	}
+	recs, err := parseNulRecords(out, 10)
+	if err != nil {
+		return nil, nil, err
+	}
+	var order []string
+	bySHA := map[string]commitMeta{}
+	for _, rec := range recs {
+		sha := rec[0]
+		order = append(order, sha)
+		bySHA[sha] = newCommitMeta(rec[1:])
+	}
+	return order, bySHA, nil
+}
+
+// parseNulRecords splits git output produced with a fully %x00-terminated
+// format into records of exactly fieldsPerRecord fields. The newline git
+// prints between commits attaches to the front of the next record's first
+// field and is stripped there.
+func parseNulRecords(out string, fieldsPerRecord int) ([][]string, error) {
+	tokens := strings.Split(out, "\x00")
+	if n := len(tokens); n > 0 && strings.Trim(tokens[n-1], "\n") == "" {
+		tokens = tokens[:n-1]
+	}
+	if len(tokens) == 0 {
+		return nil, nil
+	}
+	if len(tokens)%fieldsPerRecord != 0 {
+		return nil, fmt.Errorf("unexpected git output: %d fields not divisible by %d", len(tokens), fieldsPerRecord)
+	}
+	recs := make([][]string, 0, len(tokens)/fieldsPerRecord)
+	for i := 0; i < len(tokens); i += fieldsPerRecord {
+		rec := tokens[i : i+fieldsPerRecord]
+		rec[0] = strings.TrimPrefix(rec[0], "\n")
+		recs = append(recs, rec)
+	}
+	return recs, nil
+}
+
+func newCommitMeta(parts []string) commitMeta {
+	msg := parts[8]
 	return commitMeta{
 		Tree:           strings.TrimSpace(parts[0]),
 		Parents:        parts[1],
@@ -384,10 +461,10 @@ func loadCommitMeta(root, sha string) (commitMeta, error) {
 		CommitterEmail: parts[6],
 		CommitterDate:  parts[7],
 		Message:        msg,
-	}, nil
+	}
 }
 
-func createCommit(root string, meta commitMeta, msg string, parents []string) (string, error) {
+func createCommit(ctx context.Context, root string, meta commitMeta, msg string, parents []string) (string, error) {
 	tmp, err := os.CreateTemp(root, ".llm-lint-commit-msg-*")
 	if err != nil {
 		return "", err
@@ -408,7 +485,7 @@ func createCommit(root string, meta commitMeta, msg string, parents []string) (s
 	}
 	args = append(args, "-F", tmpPath)
 
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME="+meta.AuthorName,
 		"GIT_AUTHOR_EMAIL="+meta.AuthorEmail,
@@ -428,8 +505,8 @@ func createCommit(root string, meta commitMeta, msg string, parents []string) (s
 	return newSHA, nil
 }
 
-func updateHead(root, oldHead, newHead string) error {
-	cmd := exec.Command("git", gitArgs(root, "update-ref", "HEAD", newHead, oldHead)...)
+func updateHead(ctx context.Context, root, oldHead, newHead string) error {
+	cmd := exec.CommandContext(ctx, "git", gitArgs(root, "update-ref", "HEAD", newHead, oldHead)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("git update-ref HEAD: %w: %s", err, strings.TrimSpace(string(out)))
 	}
@@ -443,8 +520,8 @@ func shortSHA(sha string) string {
 	return sha
 }
 
-func gitOutput(root string, args ...string) (string, error) {
-	cmd := exec.Command("git", gitArgs(root, args...)...)
+func gitOutput(ctx context.Context, root string, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", gitArgs(root, args...)...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -472,8 +549,7 @@ func shouldRemoveLine(line []byte, rs []rules.Rule) bool {
 	line = bytes.TrimRight(line, "\r\n")
 	for _, r := range rs {
 		for _, p := range r.ContentPatterns {
-			re, err := regexp.Compile(p)
-			if err == nil && re.Match(line) {
+			if re := cachedRegexp(p); re != nil && re.Match(line) {
 				return true
 			}
 		}
@@ -535,7 +611,7 @@ func appendGitignore(root string, patterns map[string]struct{}, preview bool) (i
 	return len(missing), nil
 }
 
-func untrack(root string, paths map[string]struct{}, preview bool) (int, error) {
+func untrack(ctx context.Context, root string, paths map[string]struct{}, preview bool) (int, error) {
 	if len(paths) == 0 {
 		return 0, nil
 	}
@@ -553,7 +629,7 @@ func untrack(root string, paths map[string]struct{}, preview bool) (int, error) 
 
 	fixed := 0
 	for _, p := range ordered {
-		check := exec.Command("git", gitArgs(root, "ls-files", "--error-unmatch", "--", p)...)
+		check := exec.CommandContext(ctx, "git", gitArgs(root, "ls-files", "--error-unmatch", "--", p)...)
 		if err := check.Run(); err != nil {
 			continue
 		}
@@ -561,7 +637,7 @@ func untrack(root string, paths map[string]struct{}, preview bool) (int, error) 
 			fixed++
 			continue
 		}
-		cmd := exec.Command("git", gitArgs(root, "rm", "--cached", "--ignore-unmatch", "--", p)...)
+		cmd := exec.CommandContext(ctx, "git", gitArgs(root, "rm", "--cached", "--ignore-unmatch", "--", p)...)
 		if out, err := cmd.CombinedOutput(); err != nil {
 			return fixed, fmt.Errorf("git rm --cached %s: %w: %s", p, err, strings.TrimSpace(string(out)))
 		}

@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -47,7 +48,12 @@ func (e *Engine) WithProgress(p *progress.Reporter) *Engine {
 	return e
 }
 
+// Run scans with a background context. Prefer RunContext in command paths.
 func (e *Engine) Run(root string) (*Result, error) {
+	return e.RunContext(context.Background(), root)
+}
+
+func (e *Engine) RunContext(ctx context.Context, root string) (*Result, error) {
 	start := time.Now()
 	res := &Result{}
 
@@ -68,9 +74,9 @@ func (e *Engine) Run(root string) (*Result, error) {
 			stats   scanner.Stats
 		)
 		if e.cfg.StagedOnly() {
-			matches, stats, err = s.ScanIndex(root, e.prog)
+			matches, stats, err = s.ScanIndex(ctx, root, e.prog)
 		} else {
-			matches, stats, err = s.ScanWithProgress(root, e.prog)
+			matches, stats, err = s.ScanWithProgress(ctx, root, e.prog)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
@@ -90,7 +96,7 @@ func (e *Engine) Run(root string) (*Result, error) {
 		if e.prog != nil {
 			e.prog.Phase("git")
 		}
-		gres, err := gs.ScanWithProgress(root, e.prog)
+		gres, err := gs.ScanWithProgress(ctx, root, e.prog)
 		if err != nil {
 			res.GitSkipped = true
 			res.GitSkippedNote = err.Error()

@@ -314,3 +314,24 @@ func TestLoad_ValidConfigStillLoads(t *testing.T) {
 		t.Errorf("severity override not applied: %v", got)
 	}
 }
+
+func TestIsIgnoredDir_PrunesGlobSuffixPatterns(t *testing.T) {
+	cfg, err := config.Load(".llmlint.yaml", t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Defaults include vendor/** and node_modules/**; the directories
+	// themselves must be prunable, not just their contents.
+	for _, dir := range []string{"vendor", "node_modules"} {
+		if !cfg.IsIgnoredDir(dir) {
+			t.Errorf("IsIgnoredDir(%q) = false, want true", dir)
+		}
+	}
+	// "node_modules/**" covers only the top-level directory; a nested one
+	// was never ignored by the file filter, so it must not be pruned.
+	for _, dir := range []string{"src", "sub/node_modules"} {
+		if cfg.IsIgnoredDir(dir) {
+			t.Errorf("IsIgnoredDir(%q) = true, want false", dir)
+		}
+	}
+}
