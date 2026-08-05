@@ -52,10 +52,11 @@ type Rule struct {
 	Remediation string
 	AutoFix     AutoFix
 
-	PathGlobs       []string
-	ContentPatterns []string
-	TrailerPatterns []string
-	MessagePatterns []string
+	PathGlobs        []string
+	ContentPathGlobs []string
+	ContentPatterns  []string
+	TrailerPatterns  []string
+	MessagePatterns  []string
 }
 
 type AutoFix struct {

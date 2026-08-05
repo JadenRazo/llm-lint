@@ -20,5 +20,5 @@
 - [ ] README rule table updated (only if a rule was added)
 - [ ] `make lint` passes locally
 - [ ] `go run ./cmd/llm-lint scan --fail-on error` passes (self-scan)
-- [ ] For new rules: followed the canonical recipe in `CLAUDE.md` (positive + negative fixtures, concrete `Remediation`)
+- [ ] For new rules: positive + negative fixtures added, README rule table updated, concrete `Remediation` written
 - [ ] No secrets, tokens, or local paths in the diff

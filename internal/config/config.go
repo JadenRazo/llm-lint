@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
 	"sigs.k8s.io/yaml"
@@ -100,6 +101,11 @@ func Load(configPath, root string) (*Config, error) {
 	if cfg.Rules == nil {
 		cfg.Rules = map[string]RuleOverride{}
 	}
+	normalizedRules, err := normalizeRuleOverrides(cfg.Rules)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Rules = normalizedRules
 	if cfg.includeRules == nil {
 		cfg.includeRules = map[string]bool{}
 	}
@@ -108,6 +114,14 @@ func Load(configPath, root string) (*Config, error) {
 	}
 	if cfg.FailOn == "" {
 		cfg.FailOn = rules.SevError
+	}
+	if err := validateFailOn(cfg.FailOn); err != nil {
+		return nil, err
+	}
+	for _, cat := range cfg.Categories {
+		if err := validateCategory(cat); err != nil {
+			return nil, err
+		}
 	}
 	if cfg.Scan.GitHistoryDepth == 0 {
 		cfg.Scan.GitHistoryDepth = 1000
@@ -126,6 +140,29 @@ func Load(configPath, root string) (*Config, error) {
 		}
 	}
 	return cfg, nil
+}
+
+func normalizeRuleOverrides(in map[string]RuleOverride) (map[string]RuleOverride, error) {
+	out := make(map[string]RuleOverride, len(in))
+	for rawID, ov := range in {
+		id := strings.ToUpper(strings.TrimSpace(rawID))
+		if id == "" {
+			return nil, errors.New("empty rule id in config")
+		}
+		if err := validateRuleID(id); err != nil {
+			return nil, err
+		}
+		if ov.Severity != "" {
+			if err := validateSeverity(ov.Severity); err != nil {
+				return nil, fmt.Errorf("rule %s: %w", id, err)
+			}
+		}
+		if _, dup := out[id]; dup {
+			return nil, fmt.Errorf("duplicate rule override for %s", id)
+		}
+		out[id] = ov
+	}
+	return out, nil
 }
 
 // CLIOverrides bundles per-invocation flags that override values from the
@@ -148,12 +185,20 @@ func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
 		return errors.New("--staged-only and --since are mutually exclusive")
 	}
 	for _, id := range o.Includes {
+		id = strings.ToUpper(strings.TrimSpace(id))
 		if id != "" {
+			if err := validateRuleID(id); err != nil {
+				return fmt.Errorf("--include: %w", err)
+			}
 			c.includeRules[id] = true
 		}
 	}
 	for _, id := range o.Excludes {
+		id = strings.ToUpper(strings.TrimSpace(id))
 		if id != "" {
+			if err := validateRuleID(id); err != nil {
+				return fmt.Errorf("--exclude: %w", err)
+			}
 			c.excludeRules[id] = true
 		}
 	}
@@ -278,5 +323,40 @@ func validateFixGitHistory(s string) error {
 		return nil
 	default:
 		return fmt.Errorf("invalid fix.git_history %q (want none|latest|scanned)", s)
+	}
+}
+
+func validateRuleID(id string) error {
+	if _, ok := rules.Get(id); !ok {
+		return fmt.Errorf("unknown rule id %q", id)
+	}
+	return nil
+}
+
+func validateSeverity(s rules.Severity) error {
+	switch s {
+	case rules.SevError, rules.SevWarning, rules.SevInfo:
+		return nil
+	default:
+		return fmt.Errorf("invalid severity %q (want error|warning|info)", s)
+	}
+}
+
+func validateFailOn(s rules.Severity) error {
+	switch s {
+	case rules.SevError, rules.SevWarning, rules.SevInfo, "none":
+		return nil
+	default:
+		return fmt.Errorf("invalid fail_on %q (want error|warning|info|none)", s)
+	}
+}
+
+func validateCategory(cat rules.Category) error {
+	switch cat {
+	case rules.CatClaude, rules.CatCursor, rules.CatCopilot, rules.CatAider,
+		rules.CatContinue, rules.CatCodeium, rules.CatWindsurf, rules.CatGeneric:
+		return nil
+	default:
+		return fmt.Errorf("invalid category %q (want claude|cursor|copilot|aider|continue|codeium|windsurf|generic)", cat)
 	}
 }

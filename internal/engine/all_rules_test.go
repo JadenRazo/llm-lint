@@ -35,24 +35,24 @@ func TestEngine_E2E_EveryRule(t *testing.T) {
 		// LLM005 — Claude scratchpads (CLAUDE_NOTES.md, CLAUDE_*.md, .claude.local.md)
 		"CLAUDE_NOTES.md": "scratch\n",
 		// LLM006 — .cursorrules and .cursor/
-		".cursorrules":           "rule\n",
-		".cursor/settings.json":  "{}\n",
+		".cursorrules":          "rule\n",
+		".cursor/settings.json": "{}\n",
 		// LLM007 — Copilot config
 		".github/copilot-instructions.md": "instructions\n",
 		// LLM008 — Aider artifacts
-		".aider.conf.yml":         "model: x\n",
-		".aider.chat.history.md":  "log\n",
+		".aider.conf.yml":        "model: x\n",
+		".aider.chat.history.md": "log\n",
 		// LLM009 — Continue config
 		".continuerc.json":   "{}\n",
 		".continue/settings": "{}\n",
 		// LLM010 — Codeium
-		"codeium.toml":           "key = 1\n",
+		"codeium.toml":            "key = 1\n",
 		".codeium/cache/data.bin": "data\n",
 		// LLM011 — Windsurf
-		".windsurfrules":           "rule\n",
-		".windsurf/state.json":     "{}\n",
+		".windsurfrules":       "rule\n",
+		".windsurf/state.json": "{}\n",
 		// LLM015 — claude-code MCP
-		".mcp.json": `{"servers":{}}`,
+		".mcp.json": `{"mcpServers":{"claude-code":{"command":"claude-code"}}}`,
 
 		// LLM013 — refusal text in source
 		"src/handler.py": "def f():\n    # As an AI language model, I cannot fulfill that request.\n    pass\n",
@@ -62,21 +62,22 @@ func TestEngine_E2E_EveryRule(t *testing.T) {
 		// --- Near-miss negatives (must NOT trigger anything) ---------------
 		// LLM001 negative: lowercase-only "claude.md" is matched by glob too,
 		// so substitute a non-matching name.
-		"docs/notes-on-claude.md":   "not a CLAUDE.md\n",
+		"docs/notes-on-claude.md": "not a CLAUDE.md\n",
 		// LLM002 negative: a path containing "claude" but not in a `.claude/` dir.
-		"src/claude/handler.go":     "package claude\n",
+		"src/claude/handler.go": "package claude\n",
 		// LLM005 negative: file name without the CLAUDE_ prefix.
-		"docs/notes.md":             "regular notes\n",
+		"docs/notes.md": "regular notes\n",
 		// LLM006 negative: file mentions "cursor" without being a cursor config.
-		"src/cursor.go":             "package cursor\n",
+		"src/cursor.go": "package cursor\n",
 		// LLM007 negative: dependabot lives under .github but is not a copilot file.
-		"src/legit.go":              "package main\n",
+		"src/legit.go": "package main\n",
 		// LLM008 negative: aider name without leading dot.
-		"docs/aider-notes.md":       "writing about aider\n",
+		"docs/aider-notes.md": "writing about aider\n",
 		// LLM010 negative: codeium mention in a regular source file.
-		"src/codeium_client.go":     "package codeium\n",
-		// LLM015 negative: an unrelated mcp_config.json doesn't trigger.
-		"docs/mcp_config.json":      `{"unrelated":true}`,
+		"src/codeium_client.go": "package codeium\n",
+		// LLM015 negative: unrelated MCP files, including a .mcp.json without Claude Code.
+		"docs/mcp_config.json": `{"unrelated":true}`,
+		"tools/.mcp.json":      `{"mcpServers":{"local-dev":{"command":"dev-server"}}}`,
 
 		// engine config: ignore vendor + testdata so the fixture stays clean
 		".llmlint.yaml": "version: 1\nignore:\n  - vendor/**\n  - testdata/**\n",
@@ -181,21 +182,21 @@ func TestEngine_E2E_NegativeFixtures(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
 		// LLM001/LLM005: filenames that mention "claude" but don't match the globs
-		"docs/about-claude.md":   "third-party doc\n",
-		"src/claude_handler.go":  "package claude\n",
+		"docs/about-claude.md":  "third-party doc\n",
+		"src/claude_handler.go": "package claude\n",
 		// LLM006: "cursorrules" without the leading dot is not a Cursor config
-		"docs/cursorrules.md":    "discussion of cursor rules\n",
+		"docs/cursorrules.md": "discussion of cursor rules\n",
 		// LLM007: .github file that is not a copilot config
 		".github/dependabot.yml": "version: 2\n",
 		// LLM008: ".aider" near-miss without dot prefix
 		"docs/aider-tutorial.md": "guide to aider\n",
 		// LLM015: similar-but-different file name
-		"docs/mcp.json":          `{"servers":{}}`,
+		"docs/mcp.json": `{"servers":{}}`,
 		// Generic: real source code that mentions LLM-y phrases in comments
-		"src/main.go":            "package main\n// reasonable code without trigger phrases\n",
+		"src/main.go": "package main\n// reasonable code without trigger phrases\n",
 		// readme is excluded by ignore but include here for completeness
-		"README.md":              "# project\n",
-		".llmlint.yaml":          "version: 1\nignore:\n  - README.md\n",
+		"README.md":     "# project\n",
+		".llmlint.yaml": "version: 1\nignore:\n  - README.md\n",
 	}
 	for rel, content := range files {
 		full := filepath.Join(root, rel)

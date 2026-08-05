@@ -34,4 +34,22 @@ func init() {
 		Description: "Source file declares itself AI-generated.",
 		Remediation: "If intentional, add the path to your `.llmlint.yaml` ignore list. Otherwise remove the marker.",
 	})
+
+	rules.Register(rules.Rule{
+		ID:       "LLM015",
+		Title:    "claude-code MCP referenced in .mcp.json",
+		Severity: rules.SevInfo,
+		Category: rules.CatClaude,
+		Kind:     rules.KindContent,
+		ContentPathGlobs: []string{
+			".mcp.json",
+			"**/.mcp.json",
+		},
+		ContentPatterns: []string{
+			`(?i)\bclaude[-_ ]?code\b`,
+			`(?i)@anthropic-ai/claude-code\b`,
+		},
+		Description: "A repo-level .mcp.json references Claude Code MCP servers. If it pins local paths or secrets, it should not ship.",
+		Remediation: "Review the file. If it contains local-only paths or refs, move that config to `.claude/` (which should already be gitignored) or scrub the local values.",
+	})
 }

@@ -79,6 +79,61 @@ func TestScanner_Gitignore_SkipsClaudeDirectory(t *testing.T) {
 	}
 }
 
+// Case 2b: a path that is already tracked must still be scanned even if a
+// later .gitignore entry would ignore it. This is the core CI use case:
+// .gitignore cannot hide artifacts that already made it into version control.
+func TestScanner_Gitignore_TrackedFileStillFlags(t *testing.T) {
+	t.Parallel()
+	root := initRepo(t)
+	writeAndStage(t, root, "CLAUDE.md", "context\n")
+	writeFiles(t, root, map[string]string{
+		".gitignore": "CLAUDE.md\n",
+	})
+
+	cfg := &testCfg{}
+	s, err := scanner.New(cfg, rules.DefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches, _, err := s.Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := matchIDsByPath(matches)
+	want := []string{"LLM001:CLAUDE.md"}
+	if !equal(got, want) {
+		t.Errorf("tracked gitignored file must still be scanned\n got=%v\nwant=%v", got, want)
+	}
+}
+
+// Case 2c: if an ignored directory contains a tracked artifact, the walker
+// must enter that directory, scan the tracked file, and still skip untracked
+// ignored files beside it.
+func TestScanner_Gitignore_TrackedDescendantStillFlags(t *testing.T) {
+	t.Parallel()
+	root := initRepo(t)
+	writeAndStage(t, root, ".claude/settings.json", "{}\n")
+	writeFiles(t, root, map[string]string{
+		".gitignore":               ".claude/\n",
+		".claude/transcript.local": "untracked local state\n",
+	})
+
+	cfg := &testCfg{}
+	s, err := scanner.New(cfg, rules.DefaultRegistry())
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches, _, err := s.Scan(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := matchIDsByPath(matches)
+	want := []string{"LLM002:.claude/settings.json"}
+	if !equal(got, want) {
+		t.Errorf("tracked descendant in ignored dir must still be scanned\n got=%v\nwant=%v", got, want)
+	}
+}
+
 // Case 3: in a git repo with no .gitignore, current behavior is preserved
 // (path-rules still fire on present-but-untracked files).
 func TestScanner_GitRepoNoGitignore_StillFlags(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -75,6 +76,34 @@ func TestApply_PreviewDoesNotChangeContentLines(t *testing.T) {
 	}
 	if string(got) != body {
 		t.Fatalf("preview changed file:\n%s", got)
+	}
+}
+
+func TestApply_RemovesContentLinesPreservesFileMode(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("executable mode bit is not reliable on Windows")
+	}
+	root := t.TempDir()
+	src := filepath.Join(root, "scripts")
+	if err := os.MkdirAll(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(src, "clean.sh")
+	body := "#!/bin/sh\n# As an AI language model, I cannot do that\nexit 0\n"
+	if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	res := scan(t, root)
+	if _, err := fixer.Apply(root, res.Findings, rules.DefaultRegistry()); err != nil {
+		t.Fatal(err)
+	}
+	st, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := st.Mode().Perm(); got != 0o755 {
+		t.Fatalf("fixed file mode = %o, want 755", got)
 	}
 }
 

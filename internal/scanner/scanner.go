@@ -97,7 +97,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 			if rel != "." && s.cfg.IsIgnored(relSlash+"/") {
 				return filepath.SkipDir
 			}
-			if gi.match(relSlash, true) {
+			if gi.match(relSlash, true) && !gi.hasTrackedDescendant(relSlash) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -119,7 +119,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 		if s.cfg.IsIgnored(rel) {
 			return nil
 		}
-		if gi.match(rel, false) {
+		if gi.match(rel, false) && !gi.isTracked(rel) {
 			return nil
 		}
 
@@ -188,6 +188,9 @@ func (s *Scanner) applyContentRules(rel string, data []byte) []rules.Match {
 	var out []rules.Match
 	lines := bytes.Split(data, []byte{'\n'})
 	for i, r := range s.contentRules {
+		if len(r.ContentPathGlobs) > 0 && !matchesAnyGlob(rel, r.ContentPathGlobs) {
+			continue
+		}
 		regs := s.contentRegexes[i]
 		for lineIdx, line := range lines {
 			for _, re := range regs {

@@ -106,7 +106,7 @@ jobs:
         run: node npm/scripts/build.mjs --version "${GITHUB_REF_NAME#v}"
 
       - name: Publish to npm
-        run: node npm/scripts/publish.mjs --version "${GITHUB_REF_NAME#v}" --provenance
+        run: node npm/scripts/publish.mjs --version "${GITHUB_REF_NAME#v}" --provenance --skip-existing
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
