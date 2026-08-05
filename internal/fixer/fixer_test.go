@@ -374,7 +374,7 @@ func scanWithGit(t *testing.T, root string) *engine.Result {
 
 func runGit(t *testing.T, root string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(t.Context(), "git", args...)
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
 	if err != nil {

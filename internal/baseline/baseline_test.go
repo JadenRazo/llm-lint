@@ -270,13 +270,18 @@ func TestBuildEntries_SkipsUnknownRule(t *testing.T) {
 }
 
 func TestResolvePath(t *testing.T) {
-	if got := baseline.ResolvePath("", "/repo"); got != "/repo/.llmlint-baseline.yaml" {
+	// filepath.Join keeps expectations correct on Windows separators too.
+	if got := baseline.ResolvePath("", "/repo"); got != filepath.Join("/repo", ".llmlint-baseline.yaml") {
 		t.Errorf("default path: got %s", got)
 	}
-	if got := baseline.ResolvePath("custom.yaml", "/repo"); got != "/repo/custom.yaml" {
+	if got := baseline.ResolvePath("custom.yaml", "/repo"); got != filepath.Join("/repo", "custom.yaml") {
 		t.Errorf("relative path: got %s", got)
 	}
-	if got := baseline.ResolvePath("/abs/baseline.yaml", "/repo"); got != "/abs/baseline.yaml" {
+	abs, err := filepath.Abs(filepath.Join(t.TempDir(), "baseline.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := baseline.ResolvePath(abs, "/repo"); got != abs {
 		t.Errorf("absolute path: got %s", got)
 	}
 }

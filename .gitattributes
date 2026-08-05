@@ -1,0 +1,4 @@
+# Golden files are byte-compared in tests; CRLF conversion on Windows
+# checkouts would break every comparison.
+*.golden -text
+testdata/** -text

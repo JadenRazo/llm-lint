@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -47,6 +48,7 @@ func TestCLI_HookStatus_NotInstalled(t *testing.T) {
 }
 
 func TestCLI_HookInstall_Native(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := gitInit(t)
 	out, err := runHook(t, "hook", "install", "--type", "native", root)
 	if err != nil {
@@ -76,6 +78,7 @@ func TestCLI_HookInstall_Auto_PicksFramework(t *testing.T) {
 }
 
 func TestCLI_HookUninstall_Native(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := gitInit(t)
 	if _, err := runHook(t, "hook", "install", "--type", "native", root); err != nil {
 		t.Fatal(err)
@@ -109,5 +112,15 @@ func TestCLI_Hook_BareRunsStatus(t *testing.T) {
 	}
 	if !strings.Contains(string(out), "hook status:") {
 		t.Errorf("bare 'hook' should print status; got %q", out)
+	}
+}
+
+// skipNativeOnWindows skips tests for native shell hooks, which the
+// product intentionally rejects on Windows (hook install directs users to
+// --type framework there).
+func skipNativeOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("native shell hooks are unsupported on Windows by design")
 	}
 }

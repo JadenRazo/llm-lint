@@ -20,11 +20,13 @@
               "defaultConfiguration": {
                 "level": "error"
               },
+              "helpUri": "https://github.com/JadenRazo/llm-lint#rules",
               "help": {
                 "text": "Add CLAUDE.md to .gitignore and untrack with git rm --cached."
               },
               "properties": {
-                "category": "claude"
+                "category": "claude",
+                "security-severity": "8.0"
               }
             },
             {
@@ -39,11 +41,13 @@
               "defaultConfiguration": {
                 "level": "error"
               },
+              "helpUri": "https://github.com/JadenRazo/llm-lint#rules",
               "help": {
                 "text": "Set includeCoAuthoredBy: false in ~/.claude/settings.json."
               },
               "properties": {
-                "category": "claude"
+                "category": "claude",
+                "security-severity": "8.0"
               }
             },
             {
@@ -58,11 +62,13 @@
               "defaultConfiguration": {
                 "level": "warning"
               },
+              "helpUri": "https://github.com/JadenRazo/llm-lint#rules",
               "help": {
                 "text": "Set includeCoAuthoredBy: false to stop the footer."
               },
               "properties": {
-                "category": "claude"
+                "category": "claude",
+                "security-severity": "5.0"
               }
             },
             {
@@ -77,11 +83,13 @@
               "defaultConfiguration": {
                 "level": "note"
               },
+              "helpUri": "https://github.com/JadenRazo/llm-lint#rules",
               "help": {
                 "text": "Remove the offending text or add to .llmlint.yaml ignore."
               },
               "properties": {
-                "category": "generic"
+                "category": "generic",
+                "security-severity": "3.0"
               }
             }
           ],
@@ -109,6 +117,9 @@
               }
             }
           ],
+          "partialFingerprints": {
+            "llmLint/v1": "sha256:cf428deb7a7bfebfc2d43df82d9254b6493767e4fae79891dfd61205a13af4ff"
+          },
           "baselineState": "new"
         },
         {
@@ -132,6 +143,9 @@
               }
             }
           ],
+          "partialFingerprints": {
+            "llmLint/v1": "sha256:ae090b240ad141e1c69f89dea0a548b98b99c7b0826aa6005a526ae9957319a4"
+          },
           "baselineState": "new"
         },
         {
@@ -155,6 +169,9 @@
               }
             }
           ],
+          "partialFingerprints": {
+            "llmLint/v1": "sha256:b59987460d5b98751adcae11da73106534b2179ed1b25a15c1bde60c0d5c80a1"
+          },
           "baselineState": "new"
         },
         {
@@ -177,9 +194,15 @@
               }
             }
           ],
+          "partialFingerprints": {
+            "llmLint/v1": "sha256:7f20939415a2dc3b33985c0947392dd855f02f1e318cf6bb93255a26d4c0b918"
+          },
           "baselineState": "new"
         }
-      ]
+      ],
+      "automationDetails": {
+        "id": "llm-lint/scan"
+      }
     }
   ]
 }

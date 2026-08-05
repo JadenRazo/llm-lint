@@ -224,7 +224,7 @@ func (c *prClient) wrapErr(method, urlStr string, status int, cause error) error
 		return fmt.Errorf("github API %s %s: %d", method, path, status)
 	}
 	// Network-level error. Keep cause but ensure it doesn't expose the token.
-	return fmt.Errorf("github API %s %s: %v", method, path, sanitizeErr(cause, c.token))
+	return fmt.Errorf("github API %s %s: %w", method, path, sanitizeErr(cause, c.token))
 }
 
 func redactURL(urlStr, base string) string {

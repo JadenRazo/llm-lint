@@ -131,13 +131,32 @@ func TestCLI_RulesShow_UnknownID(t *testing.T) {
 
 func TestCLI_Version(t *testing.T) {
 	out, _ := runCommand(t, "version")
-	// Version is `dev` in test builds; the binary prints it followed by a newline.
-	versionRe := regexp.MustCompile(`^[^\s]+\n$`)
-	if !versionRe.Match(out) {
-		t.Errorf("version output not single token+newline: %q", out)
+	// Long form: llm-lint <version> (commit <sha>, built <date>, <go version>).
+	longRe := regexp.MustCompile(`^llm-lint \S+ \(commit \S+, built \S+, go\S+\)\n$`)
+	if !longRe.Match(out) {
+		t.Errorf("version output not in long form: %q", out)
 	}
 	if !strings.Contains(string(out), "dev") {
 		t.Errorf("test binary should print version 'dev'; got %q", out)
+	}
+}
+
+func TestCLI_VersionShort(t *testing.T) {
+	out, _ := runCommand(t, "version", "--short")
+	// Script compat: bare version token followed by a newline, nothing else.
+	shortRe := regexp.MustCompile(`^[^\s]+\n$`)
+	if !shortRe.Match(out) {
+		t.Errorf("version --short output not single token+newline: %q", out)
+	}
+	if strings.TrimSpace(string(out)) != "dev" {
+		t.Errorf("test binary should print bare version 'dev'; got %q", out)
+	}
+}
+
+func TestCLI_VersionFlag(t *testing.T) {
+	out, _ := runCommand(t, "--version")
+	if !strings.Contains(string(out), "llm-lint dev (commit ") {
+		t.Errorf("--version should print the long version line; got %q", out)
 	}
 }
 

@@ -62,7 +62,9 @@ func TestSARIF_ValidatesAgainstSchema(t *testing.T) {
 	}
 
 	schemaPath := schemaPath(t)
-	schemaLoader := gojsonschema.NewReferenceLoader("file://" + schemaPath)
+	// file:///C:/... form is required for Windows drive-letter paths;
+	// "file://" + "C:\..." parses the drive letter as a port.
+	schemaLoader := gojsonschema.NewReferenceLoader("file:///" + filepath.ToSlash(strings.TrimPrefix(schemaPath, "/")))
 	docLoader := gojsonschema.NewBytesLoader(buf.Bytes())
 	result, err := gojsonschema.Validate(schemaLoader, docLoader)
 	if err != nil {

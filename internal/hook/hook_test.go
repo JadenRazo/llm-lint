@@ -3,6 +3,7 @@ package hook_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -28,6 +29,7 @@ func read(t *testing.T, path string) string {
 }
 
 func TestInstall_NativeOnCleanRepo(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	st, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
@@ -55,6 +57,7 @@ func TestInstall_NativeOnCleanRepo(t *testing.T) {
 }
 
 func TestInstall_NativeIdempotent(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
@@ -84,6 +87,7 @@ func TestInstall_NativeIdempotent(t *testing.T) {
 }
 
 func TestInstall_RefusesForeignNativeWithoutForce(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
@@ -104,6 +108,7 @@ func TestInstall_RefusesForeignNativeWithoutForce(t *testing.T) {
 }
 
 func TestInstall_OverwritesForeignNativeWithForce(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
@@ -127,6 +132,7 @@ func TestInstall_OverwritesForeignNativeWithForce(t *testing.T) {
 }
 
 func TestUninstall_NativeRemovesManagedBlock(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
@@ -364,6 +370,7 @@ func TestStatus_DetectsNotInstalled(t *testing.T) {
 }
 
 func TestStatus_DetectsBoth(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
@@ -402,6 +409,7 @@ func TestStatus_DetectsForeign(t *testing.T) {
 }
 
 func TestUninstall_BothRequiresType(t *testing.T) {
+	skipNativeOnWindows(t)
 	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
@@ -489,5 +497,15 @@ func TestInstall_NotARepo_Errors(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "not a git repository") {
 		t.Errorf("expected 'not a git repository'; got %v", err)
+	}
+}
+
+// skipNativeOnWindows skips tests for native shell hooks, which the
+// product intentionally rejects on Windows (hook install directs users to
+// --type framework there).
+func skipNativeOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("native shell hooks are unsupported on Windows by design")
 	}
 }

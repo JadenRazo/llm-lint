@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/JadenRazo/llm-lint/internal/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
 
 // stubServer collects requests and returns scripted responses.
