@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 
 	"github.com/fatih/color"
 
 	"github.com/JadenRazo/llm-lint/internal/engine"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 type HumanReporter struct {
@@ -24,7 +24,7 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 		defer r.closer.Close()
 	}
 
-	useColor := !r.opts.NoColor && os.Getenv("NO_COLOR") == "" && isTTY(r.w)
+	useColor := !r.opts.NoColor && os.Getenv("NO_COLOR") == "" && textutil.IsTTY(r.w)
 	c := newColors(useColor)
 
 	header := fmt.Sprintf("llm-lint %s  scanned %d files + %d commits in %dms",
@@ -66,7 +66,7 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 			fmt.Fprintln(r.w, line)
 		}
 		if first.Remediation != "" {
-			fmt.Fprintln(r.w, c.dim(indent(first.Remediation, "      ")))
+			fmt.Fprintln(r.w, c.dim(textutil.Indent(first.Remediation, "      ")))
 		}
 		fmt.Fprintln(r.w)
 	}
@@ -110,7 +110,7 @@ func groupByRule(fs []findings.Finding) [][]findings.Finding {
 
 func formatLocation(f findings.Finding) string {
 	if f.Location.Kind == findings.LocCommit {
-		s := fmt.Sprintf("commit %s", short(f.Location.CommitSHA))
+		s := fmt.Sprintf("commit %s", textutil.ShortSHA(f.Location.CommitSHA))
 		if f.Location.CommitMsg != "" {
 			s += fmt.Sprintf(" %q", f.Location.CommitMsg)
 		}
@@ -130,21 +130,6 @@ func formatLocation(f findings.Finding) string {
 		loc += "\n      " + f.Location.Snippet
 	}
 	return loc
-}
-
-func short(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
-}
-
-func indent(s, pad string) string {
-	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	for i, l := range lines {
-		lines[i] = pad + l
-	}
-	return strings.Join(lines, "\n")
 }
 
 func severityGlyph(sev rules.Severity, c colors) (string, string) {
@@ -185,16 +170,4 @@ func newColors(enabled bool) colors {
 		info: color.New(color.FgCyan).SprintFunc(),
 		ok:   color.New(color.FgGreen, color.Bold).SprintFunc(),
 	}
-}
-
-func isTTY(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
-	st, err := f.Stat()
-	if err != nil {
-		return false
-	}
-	return (st.Mode() & os.ModeCharDevice) != 0
 }

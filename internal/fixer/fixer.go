@@ -14,6 +14,7 @@ import (
 
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 type GitHistoryMode string
@@ -254,7 +255,7 @@ func rewriteScannedCommitMessages(ctx context.Context, root string, targets map[
 			seenTargets[sha] = struct{}{}
 			cleaned, removed = cleanCommitMessage(msg, rs)
 			if removed > 0 && strings.TrimSpace(cleaned) == "" {
-				return changedCommits, removedLines, unfixable, fmt.Errorf("refusing to auto-fix commit %s message to empty", shortSHA(sha))
+				return changedCommits, removedLines, unfixable, fmt.Errorf("refusing to auto-fix commit %s message to empty", textutil.ShortSHA(sha))
 			}
 			if removed == 0 {
 				unfixable += len(rs)
@@ -398,7 +399,7 @@ func loadCommitMeta(ctx context.Context, root, sha string) (commitMeta, error) {
 	}
 	recs, err := parseNulRecords(out, 9)
 	if err != nil || len(recs) != 1 {
-		return commitMeta{}, fmt.Errorf("unexpected commit metadata for %s", shortSHA(sha))
+		return commitMeta{}, fmt.Errorf("unexpected commit metadata for %s", textutil.ShortSHA(sha))
 	}
 	return newCommitMeta(recs[0]), nil
 }
@@ -511,13 +512,6 @@ func updateHead(ctx context.Context, root, oldHead, newHead string) error {
 		return fmt.Errorf("git update-ref HEAD: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
-}
-
-func shortSHA(sha string) string {
-	if len(sha) > 7 {
-		return sha[:7]
-	}
-	return sha
 }
 
 func gitOutput(ctx context.Context, root string, args ...string) (string, error) {

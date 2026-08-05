@@ -13,6 +13,7 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/rules"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
 
 type testCfg struct {
@@ -38,7 +39,7 @@ func makeRepo(t *testing.T, commits []commit) string {
 		t.Fatal(err)
 	}
 	for i, c := range commits {
-		fname := filepath.Join(dir, "f"+itoa(i)+".txt")
+		fname := filepath.Join(dir, "f"+testutil.Itoa(i)+".txt")
 		if err := os.WriteFile(fname, []byte(c.fileContent), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -204,8 +205,8 @@ func TestGitScan_DepthLimit(t *testing.T) {
 	commits := make([]commit, 0, 10)
 	for i := 0; i < 10; i++ {
 		commits = append(commits, commit{
-			msg:         "commit " + itoa(i) + "\n",
-			fileContent: itoa(i),
+			msg:         "commit " + testutil.Itoa(i) + "\n",
+			fileContent: testutil.Itoa(i),
 			author:      "X", email: "x@example.com",
 		})
 	}
@@ -219,23 +220,6 @@ func TestGitScan_DepthLimit(t *testing.T) {
 	if res.CommitsScanned != 3 {
 		t.Errorf("depth=3 should scan 3 commits; got %d", res.CommitsScanned)
 	}
-}
-
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := ""
-	if i < 0 {
-		neg = "-"
-		i = -i
-	}
-	out := ""
-	for i > 0 {
-		out = string(rune('0'+i%10)) + out
-		i /= 10
-	}
-	return neg + out
 }
 
 func contains(s, sub string) bool {

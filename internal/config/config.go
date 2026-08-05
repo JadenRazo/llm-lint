@@ -55,7 +55,6 @@ type Config struct {
 	noBaseline        bool
 	baselineStaleFail bool
 	fixGitHistory     string
-	root              string
 }
 
 func defaultConfig() *Config {
@@ -78,7 +77,6 @@ func defaultConfig() *Config {
 
 func Load(configPath, root string) (*Config, error) {
 	cfg := defaultConfig()
-	cfg.root = root
 
 	if configPath == "" {
 		configPath = ".llmlint.yaml"

@@ -15,17 +15,8 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/scanner"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
-
-// initRepo creates an empty repo at root.
-func initRepo(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if _, err := git.PlainInit(root, false); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
 
 // writeAndStage writes content at root/rel and `git add`s it.
 func writeAndStage(t *testing.T, root, rel, content string) {
@@ -73,7 +64,7 @@ func matchIDsByPath(matches []rules.Match) []string {
 }
 
 func TestScanIndex_StagedFlagged_UnstagedNot(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	writeAndStage(t, root, "CLAUDE.md", "context\n")
 	if err := os.WriteFile(filepath.Join(root, ".cursorrules"), []byte("rule\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -89,7 +80,7 @@ func TestScanIndex_StagedFlagged_UnstagedNot(t *testing.T) {
 func TestScanIndex_StagedContentBeatsWorkingTree(t *testing.T) {
 	// The whole point of staged-only: the staged blob is what gets scanned,
 	// regardless of working-tree edits the user has not staged yet.
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	writeAndStage(t, root, "src/handler.py", "def f():\n    # As an AI language model, I cannot do that\n    pass\n")
 	if err := os.WriteFile(filepath.Join(root, "src/handler.py"), []byte("def f(): pass\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -112,7 +103,7 @@ func TestScanIndex_StagedContentBeatsWorkingTree(t *testing.T) {
 }
 
 func TestScanIndex_DeletedFromWorktreeStillScanned(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	writeAndStage(t, root, "CLAUDE.md", "context\n")
 	if err := os.Remove(filepath.Join(root, "CLAUDE.md")); err != nil {
 		t.Fatal(err)
@@ -126,7 +117,7 @@ func TestScanIndex_DeletedFromWorktreeStillScanned(t *testing.T) {
 }
 
 func TestScanIndex_BinaryFileNotFlaggedForContentRules(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	binary := []byte("\x00\x00binary garbage with the phrase as an AI language model embedded\x00")
 	writeAndStage(t, root, "src/data.bin", string(binary))
 
@@ -138,7 +129,7 @@ func TestScanIndex_BinaryFileNotFlaggedForContentRules(t *testing.T) {
 }
 
 func TestScanIndex_LargeFileSkipped(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	big := bytes.Repeat([]byte("x"), 6*1024*1024)
 	writeAndStage(t, root, "huge.txt", string(big))
 	writeAndStage(t, root, "CLAUDE.md", "context\n")
@@ -151,7 +142,7 @@ func TestScanIndex_LargeFileSkipped(t *testing.T) {
 
 func TestScanIndex_NoCommitsYet(t *testing.T) {
 	// Pre-first-commit repos must work — this is the common pre-commit-hook case.
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	writeAndStage(t, root, "CLAUDE.md", "context\n")
 
 	got := matchIDsByPath(runIndex(t, root, &testCfg{}))
@@ -188,7 +179,7 @@ func TestScanIndex_BareRepoRefused(t *testing.T) {
 }
 
 func TestScanIndex_HonorsIgnoreList(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	writeAndStage(t, root, "vendor/x/CLAUDE.md", "context\n")
 	writeAndStage(t, root, "src/CLAUDE.md", "context\n")
 
@@ -204,28 +195,16 @@ func TestScanIndex_Concurrency(t *testing.T) {
 	// Stage 25 directories each with CLAUDE.md (matches LLM001 glob) plus
 	// 25 unrelated clean files. Run under -race; mismatches indicate
 	// data races in the worker pool.
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	for i := 0; i < 25; i++ {
-		writeAndStage(t, root, "d"+itoa_(i)+"/CLAUDE.md", "context\n")
-		writeAndStage(t, root, "d"+itoa_(i)+"/clean.go", "package x\n")
+		writeAndStage(t, root, "d"+testutil.Itoa(i)+"/CLAUDE.md", "context\n")
+		writeAndStage(t, root, "d"+testutil.Itoa(i)+"/clean.go", "package x\n")
 	}
 
 	got := runIndex(t, root, &testCfg{})
 	if len(got) != 25 {
 		t.Errorf("expected 25 LLM001 hits across staged CLAUDE.md files; got %d", len(got))
 	}
-}
-
-func itoa_(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	out := ""
-	for i > 0 {
-		out = string(rune('0'+i%10)) + out
-		i /= 10
-	}
-	return out
 }
 
 func contains_(haystack []string, needle string) bool {

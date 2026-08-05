@@ -15,20 +15,26 @@ import (
 )
 
 type Result struct {
-	Findings           []findings.Finding `json:"findings"`
-	Summary            findings.Summary   `json:"summary"`
-	FilesScanned       int64              `json:"files_scanned"`
-	FilesUnreadable    int64              `json:"files_unreadable,omitempty"`
-	CommitsScanned     int                `json:"commits_scanned"`
-	DurationMS         int64              `json:"duration_ms"`
-	GitShallow         bool               `json:"git_shallow,omitempty"`
-	GitSkipped         bool               `json:"git_skipped,omitempty"`
-	GitSkippedNote     string             `json:"git_skipped_note,omitempty"`
-	SinceUnresolved    string             `json:"since_unresolved,omitempty"`
-	BaselinePath       string             `json:"baseline_path,omitempty"`
-	BaselineLoaded     bool               `json:"baseline_loaded,omitempty"`
-	BaselinedCount     int                `json:"baselined_count,omitempty"`
-	StaleBaselineCount int                `json:"stale_baseline_count,omitempty"`
+	Findings     []findings.Finding `json:"findings"`
+	Summary      findings.Summary   `json:"summary"`
+	FilesScanned int64              `json:"files_scanned"`
+	// FilesWalked counts every regular file the walker visited, including
+	// ones the ignore rules filtered out; BytesRead is the total content
+	// read for content-rule matching. Together they explain what a scan
+	// actually cost, not just what it kept.
+	FilesWalked        int64  `json:"files_walked"`
+	BytesRead          int64  `json:"bytes_read"`
+	FilesUnreadable    int64  `json:"files_unreadable,omitempty"`
+	CommitsScanned     int    `json:"commits_scanned"`
+	DurationMS         int64  `json:"duration_ms"`
+	GitShallow         bool   `json:"git_shallow,omitempty"`
+	GitSkipped         bool   `json:"git_skipped,omitempty"`
+	GitSkippedNote     string `json:"git_skipped_note,omitempty"`
+	SinceUnresolved    string `json:"since_unresolved,omitempty"`
+	BaselinePath       string `json:"baseline_path,omitempty"`
+	BaselineLoaded     bool   `json:"baseline_loaded,omitempty"`
+	BaselinedCount     int    `json:"baselined_count,omitempty"`
+	StaleBaselineCount int    `json:"stale_baseline_count,omitempty"`
 }
 
 type Engine struct {
@@ -85,6 +91,8 @@ func (e *Engine) RunContext(ctx context.Context, root string) (*Result, error) {
 			res.Findings = append(res.Findings, findings.FromMatch(m))
 		}
 		res.FilesScanned = stats.FilesScanned
+		res.FilesWalked = stats.FilesWalked
+		res.BytesRead = stats.BytesRead
 		res.FilesUnreadable = stats.FilesUnreadable
 	}
 

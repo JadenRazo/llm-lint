@@ -7,6 +7,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 // syncBuf is a goroutine-safe wrapper around bytes.Buffer so the render
@@ -28,7 +30,7 @@ func (s *syncBuf) String() string {
 	return s.buf.String()
 }
 
-// newEnabledForTest bypasses the isTTY check so the rendering path can be
+// newEnabledForTest bypasses the textutil.IsTTY check so the rendering path can be
 // exercised with a bytes-backed writer.
 func newEnabledForTest(w *syncBuf) *Reporter {
 	return &Reporter{w: w, enabled: true}
@@ -244,7 +246,7 @@ func TestPhaseTransitionShortensLine(t *testing.T) {
 }
 
 func TestIsTTYWithDevNull(t *testing.T) {
-	// /dev/null is a character device on Linux/macOS, so isTTY returns true
+	// /dev/null is a character device on Linux/macOS, so textutil.IsTTY returns true
 	// for it. New() therefore enables the reporter.
 	f, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
 	if err != nil {
@@ -252,7 +254,7 @@ func TestIsTTYWithDevNull(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 
-	if !isTTY(f) {
+	if !textutil.IsTTY(f) {
 		t.Skip("os.DevNull is not a character device on this platform")
 	}
 
@@ -267,7 +269,7 @@ func TestIsTTYWithDevNull(t *testing.T) {
 }
 
 func TestIsTTYRejectsBuffer(t *testing.T) {
-	if isTTY(&bytes.Buffer{}) {
-		t.Fatal("isTTY should return false for non-*os.File writer")
+	if textutil.IsTTY(&bytes.Buffer{}) {
+		t.Fatal("IsTTY should return false for non-*os.File writer")
 	}
 }

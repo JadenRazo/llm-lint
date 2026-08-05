@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -86,15 +86,11 @@ func (s *stubServer) handle(w http.ResponseWriter, r *http.Request) {
 		id, _ := strconv.Atoi(parts[len(parts)-1])
 		s.editCalls[id] = payload.Body
 		w.WriteHeader(http.StatusOK)
-		_, _ = io.WriteString(w, `{"id":`+itoa(id)+`}`)
+		_, _ = io.WriteString(w, `{"id":`+testutil.Itoa(id)+`}`)
 
 	default:
 		http.Error(w, "unexpected request", http.StatusInternalServerError)
 	}
-}
-
-func itoa(i int) string {
-	return fmt.Sprintf("%d", i)
 }
 
 func newClientForTest(t *testing.T, url, body string, env func(string) string) *prClient {

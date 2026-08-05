@@ -36,6 +36,8 @@ type toolInfo struct {
 
 type scannedInfo struct {
 	Files           int64  `json:"files"`
+	FilesWalked     int64  `json:"files_walked"`
+	BytesRead       int64  `json:"bytes_read"`
 	FilesUnreadable int64  `json:"files_unreadable,omitempty"`
 	Commits         int    `json:"commits"`
 	DurationMS      int64  `json:"duration_ms"`
@@ -53,6 +55,8 @@ func (r *JSONReporter) Write(res *engine.Result) error {
 		Tool: toolInfo{Name: "llm-lint", Version: r.opts.Version},
 		Scanned: scannedInfo{
 			Files:           res.FilesScanned,
+			FilesWalked:     res.FilesWalked,
+			BytesRead:       res.BytesRead,
 			FilesUnreadable: res.FilesUnreadable,
 			Commits:         res.CommitsScanned,
 			DurationMS:      res.DurationMS,
