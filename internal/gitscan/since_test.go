@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
 
 // TestGitScan_SinceFlag_StopsAtBoundary verifies that --since (passed via
@@ -32,14 +33,14 @@ func TestGitScan_SinceFlag_StopsAtBoundary(t *testing.T) {
 	const total = 5
 	hashes := make([]string, 0, total)
 	for i := 0; i < total; i++ {
-		fname := filepath.Join(root, "f"+itoa(i)+".txt")
-		if err := os.WriteFile(fname, []byte(itoa(i)), 0o644); err != nil {
+		fname := filepath.Join(root, "f"+testutil.Itoa(i)+".txt")
+		if err := os.WriteFile(fname, []byte(testutil.Itoa(i)), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := wt.Add(filepath.Base(fname)); err != nil {
 			t.Fatal(err)
 		}
-		h, err := wt.Commit("commit "+itoa(i)+"\n", &git.CommitOptions{
+		h, err := wt.Commit("commit "+testutil.Itoa(i)+"\n", &git.CommitOptions{
 			Author: &object.Signature{
 				Name: "Tester", Email: "t@example.com",
 				When: time.Date(2026, 5, 1, 12, i, 0, 0, time.UTC),
@@ -79,14 +80,14 @@ func TestGitScan_SinceFlag_UnknownRef_FallsBackToFullScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 3; i++ {
-		fname := filepath.Join(root, "f"+itoa(i)+".txt")
+		fname := filepath.Join(root, "f"+testutil.Itoa(i)+".txt")
 		if err := os.WriteFile(fname, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := wt.Add(filepath.Base(fname)); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := wt.Commit("c"+itoa(i)+"\n", &git.CommitOptions{
+		if _, err := wt.Commit("c"+testutil.Itoa(i)+"\n", &git.CommitOptions{
 			Author: &object.Signature{Name: "T", Email: "t@e", When: time.Date(2026, 5, 1, 12, i, 0, 0, time.UTC)},
 		}); err != nil {
 			t.Fatal(err)

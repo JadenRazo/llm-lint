@@ -15,6 +15,7 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/rules"
 
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
 
 // TestEngine_E2E_EveryRule exhaustively exercises every registered rule
@@ -166,7 +167,7 @@ func TestEngine_E2E_EveryRule(t *testing.T) {
 		if got[id] == 0 {
 			ids := make([]string, 0, len(got))
 			for k, v := range got {
-				ids = append(ids, k+":"+itoa(v))
+				ids = append(ids, k+":"+testutil.Itoa(v))
 			}
 			sort.Strings(ids)
 			t.Errorf("rule %s produced no finding; got=%v", id, ids)
@@ -243,21 +244,4 @@ func TestEngine_E2E_NegativeFixtures(t *testing.T) {
 		sort.Strings(ids)
 		t.Errorf("expected zero findings on near-miss corpus; got %d:\n%v", len(res.Findings), ids)
 	}
-}
-
-func itoa(i int) string {
-	if i == 0 {
-		return "0"
-	}
-	neg := ""
-	if i < 0 {
-		neg = "-"
-		i = -i
-	}
-	out := ""
-	for i > 0 {
-		out = string(rune('0'+i%10)) + out
-		i /= 10
-	}
-	return neg + out
 }

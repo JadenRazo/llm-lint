@@ -6,19 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	git "github.com/go-git/go-git/v5"
-
 	"github.com/JadenRazo/llm-lint/internal/hook"
+	"github.com/JadenRazo/llm-lint/internal/testutil"
 )
-
-func initRepo(t *testing.T) string {
-	t.Helper()
-	d := t.TempDir()
-	if _, err := git.PlainInit(d, false); err != nil {
-		t.Fatal(err)
-	}
-	return d
-}
 
 func nativePath(root string) string {
 	return filepath.Join(root, ".git", "hooks", "pre-commit")
@@ -38,7 +28,7 @@ func read(t *testing.T, path string) string {
 }
 
 func TestInstall_NativeOnCleanRepo(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
 	})
@@ -65,7 +55,7 @@ func TestInstall_NativeOnCleanRepo(t *testing.T) {
 }
 
 func TestInstall_NativeIdempotent(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -94,7 +84,7 @@ func TestInstall_NativeIdempotent(t *testing.T) {
 }
 
 func TestInstall_RefusesForeignNativeWithoutForce(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +104,7 @@ func TestInstall_RefusesForeignNativeWithoutForce(t *testing.T) {
 }
 
 func TestInstall_OverwritesForeignNativeWithForce(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +127,7 @@ func TestInstall_OverwritesForeignNativeWithForce(t *testing.T) {
 }
 
 func TestUninstall_NativeRemovesManagedBlock(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -152,7 +142,7 @@ func TestUninstall_NativeRemovesManagedBlock(t *testing.T) {
 }
 
 func TestUninstall_PreservesForeignContentAroundMarkers(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +166,7 @@ func TestUninstall_PreservesForeignContentAroundMarkers(t *testing.T) {
 }
 
 func TestUninstall_NothingInstalled_NoOp(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.Uninstall(root, hook.ModeAuto)
 	if err != nil {
 		t.Fatal(err)
@@ -187,7 +177,7 @@ func TestUninstall_NothingInstalled_NoOp(t *testing.T) {
 }
 
 func TestInstall_FrameworkOnEmptyConfig(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "0.1.2",
 	})
@@ -210,7 +200,7 @@ func TestInstall_FrameworkOnEmptyConfig(t *testing.T) {
 }
 
 func TestInstall_FrameworkIdempotentSameRev(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -239,7 +229,7 @@ func TestInstall_FrameworkIdempotentSameRev(t *testing.T) {
 }
 
 func TestInstall_FrameworkRevUpdatePreservesComments(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	initial := `# top comment
 repos:
   # another tool
@@ -276,7 +266,7 @@ repos:
 }
 
 func TestInstall_FrameworkAppendsToExistingConfig(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	initial := `repos:
   - repo: https://github.com/some/other
     rev: v1.0
@@ -301,7 +291,7 @@ func TestInstall_FrameworkAppendsToExistingConfig(t *testing.T) {
 }
 
 func TestInstall_FrameworkMultiDocRefused(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	multi := "---\nrepos: []\n---\nrepos: []\n"
 	if err := os.WriteFile(frameworkPath(root), []byte(multi), 0o644); err != nil {
 		t.Fatal(err)
@@ -315,7 +305,7 @@ func TestInstall_FrameworkMultiDocRefused(t *testing.T) {
 }
 
 func TestInstall_RefusesMovingRevWithoutOptIn(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	_, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, Rev: "HEAD", BinaryVersion: "0.1.2",
 	})
@@ -325,7 +315,7 @@ func TestInstall_RefusesMovingRevWithoutOptIn(t *testing.T) {
 }
 
 func TestInstall_AllowsMovingRevWithOptIn(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, Rev: "main", AllowMovingRev: true, BinaryVersion: "0.1.2",
 	})
@@ -341,7 +331,7 @@ func TestInstall_AllowsMovingRevWithOptIn(t *testing.T) {
 }
 
 func TestInstall_DevBinaryFallsBackToZeroVersion(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "dev",
 	})
@@ -363,7 +353,7 @@ func TestInstall_DevBinaryFallsBackToZeroVersion(t *testing.T) {
 }
 
 func TestStatus_DetectsNotInstalled(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	st, err := hook.GetStatus(root)
 	if err != nil {
 		t.Fatal(err)
@@ -374,7 +364,7 @@ func TestStatus_DetectsNotInstalled(t *testing.T) {
 }
 
 func TestStatus_DetectsBoth(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -395,7 +385,7 @@ func TestStatus_DetectsBoth(t *testing.T) {
 }
 
 func TestStatus_DetectsForeign(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if err := os.MkdirAll(filepath.Join(root, ".git", "hooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +402,7 @@ func TestStatus_DetectsForeign(t *testing.T) {
 }
 
 func TestUninstall_BothRequiresType(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeNative, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -430,7 +420,7 @@ func TestUninstall_BothRequiresType(t *testing.T) {
 }
 
 func TestUninstall_FrameworkRemovesEntry(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	if _, err := hook.Install(hook.InstallOptions{
 		RepoRoot: root, Mode: hook.ModeFramework, BinaryVersion: "0.1.2",
 	}); err != nil {
@@ -450,7 +440,7 @@ func TestUninstall_FrameworkRemovesEntry(t *testing.T) {
 }
 
 func TestUninstall_FrameworkPreservesOtherRepos(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	existing := `repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.0
@@ -481,7 +471,7 @@ func TestUninstall_FrameworkPreservesOtherRepos(t *testing.T) {
 }
 
 func TestUninstall_FrameworkNoConfig_NoError(t *testing.T) {
-	root := initRepo(t)
+	root := testutil.InitRepo(t)
 	// No .pre-commit-config.yaml present at all.
 	st, err := hook.Uninstall(root, hook.ModeFramework)
 	if err != nil {

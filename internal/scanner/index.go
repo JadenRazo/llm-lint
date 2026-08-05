@@ -45,7 +45,7 @@ func readBlob(repo *git.Repository, hash plumbing.Hash) ([]byte, error) {
 // not stage the fix still sees the staged-bad version flagged. Trailer and
 // message rules do not apply (no commit yet at pre-commit time) — the
 // engine layer is responsible for not invoking gitscan in staged-only mode.
-func (s *Scanner) ScanIndex(root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
+func (s *Scanner) ScanIndex(ctx context.Context, root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
 	var stats Stats
 
 	absRoot, err := filepath.Abs(root)
@@ -75,7 +75,7 @@ func (s *Scanner) ScanIndex(root string, prog *progress.Reporter) ([]rules.Match
 		matches []rules.Match
 	)
 
-	g, ctx := errgroup.WithContext(context.Background())
+	g, ctx := errgroup.WithContext(ctx)
 	sem := make(chan struct{}, indexWorkers)
 
 schedule:

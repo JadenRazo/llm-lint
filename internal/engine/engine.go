@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -14,20 +15,26 @@ import (
 )
 
 type Result struct {
-	Findings           []findings.Finding `json:"findings"`
-	Summary            findings.Summary   `json:"summary"`
-	FilesScanned       int64              `json:"files_scanned"`
-	FilesUnreadable    int64              `json:"files_unreadable,omitempty"`
-	CommitsScanned     int                `json:"commits_scanned"`
-	DurationMS         int64              `json:"duration_ms"`
-	GitShallow         bool               `json:"git_shallow,omitempty"`
-	GitSkipped         bool               `json:"git_skipped,omitempty"`
-	GitSkippedNote     string             `json:"git_skipped_note,omitempty"`
-	SinceUnresolved    string             `json:"since_unresolved,omitempty"`
-	BaselinePath       string             `json:"baseline_path,omitempty"`
-	BaselineLoaded     bool               `json:"baseline_loaded,omitempty"`
-	BaselinedCount     int                `json:"baselined_count,omitempty"`
-	StaleBaselineCount int                `json:"stale_baseline_count,omitempty"`
+	Findings     []findings.Finding `json:"findings"`
+	Summary      findings.Summary   `json:"summary"`
+	FilesScanned int64              `json:"files_scanned"`
+	// FilesWalked counts every regular file the walker visited, including
+	// ones the ignore rules filtered out; BytesRead is the total content
+	// read for content-rule matching. Together they explain what a scan
+	// actually cost, not just what it kept.
+	FilesWalked        int64  `json:"files_walked"`
+	BytesRead          int64  `json:"bytes_read"`
+	FilesUnreadable    int64  `json:"files_unreadable,omitempty"`
+	CommitsScanned     int    `json:"commits_scanned"`
+	DurationMS         int64  `json:"duration_ms"`
+	GitShallow         bool   `json:"git_shallow,omitempty"`
+	GitSkipped         bool   `json:"git_skipped,omitempty"`
+	GitSkippedNote     string `json:"git_skipped_note,omitempty"`
+	SinceUnresolved    string `json:"since_unresolved,omitempty"`
+	BaselinePath       string `json:"baseline_path,omitempty"`
+	BaselineLoaded     bool   `json:"baseline_loaded,omitempty"`
+	BaselinedCount     int    `json:"baselined_count,omitempty"`
+	StaleBaselineCount int    `json:"stale_baseline_count,omitempty"`
 }
 
 type Engine struct {
@@ -47,7 +54,12 @@ func (e *Engine) WithProgress(p *progress.Reporter) *Engine {
 	return e
 }
 
+// Run scans with a background context. Prefer RunContext in command paths.
 func (e *Engine) Run(root string) (*Result, error) {
+	return e.RunContext(context.Background(), root)
+}
+
+func (e *Engine) RunContext(ctx context.Context, root string) (*Result, error) {
 	start := time.Now()
 	res := &Result{}
 
@@ -68,9 +80,9 @@ func (e *Engine) Run(root string) (*Result, error) {
 			stats   scanner.Stats
 		)
 		if e.cfg.StagedOnly() {
-			matches, stats, err = s.ScanIndex(root, e.prog)
+			matches, stats, err = s.ScanIndex(ctx, root, e.prog)
 		} else {
-			matches, stats, err = s.ScanWithProgress(root, e.prog)
+			matches, stats, err = s.ScanWithProgress(ctx, root, e.prog)
 		}
 		if err != nil {
 			return nil, fmt.Errorf("scan: %w", err)
@@ -79,6 +91,8 @@ func (e *Engine) Run(root string) (*Result, error) {
 			res.Findings = append(res.Findings, findings.FromMatch(m))
 		}
 		res.FilesScanned = stats.FilesScanned
+		res.FilesWalked = stats.FilesWalked
+		res.BytesRead = stats.BytesRead
 		res.FilesUnreadable = stats.FilesUnreadable
 	}
 
@@ -90,7 +104,7 @@ func (e *Engine) Run(root string) (*Result, error) {
 		if e.prog != nil {
 			e.prog.Phase("git")
 		}
-		gres, err := gs.ScanWithProgress(root, e.prog)
+		gres, err := gs.ScanWithProgress(ctx, root, e.prog)
 		if err != nil {
 			res.GitSkipped = true
 			res.GitSkippedNote = err.Error()

@@ -9,6 +9,7 @@ import (
 	"github.com/JadenRazo/llm-lint/internal/engine"
 	"github.com/JadenRazo/llm-lint/internal/findings"
 	"github.com/JadenRazo/llm-lint/internal/rules"
+	"github.com/JadenRazo/llm-lint/internal/textutil"
 )
 
 type SARIFReporter struct {
@@ -69,7 +70,7 @@ func (r *SARIFReporter) Write(res *engine.Result) error {
 			}
 			loc := sarif.NewLocationWithPhysicalLocation(
 				sarif.NewPhysicalLocation().
-					WithArtifactLocation(sarif.NewSimpleArtifactLocation(".git/COMMIT_" + short(f.Location.CommitSHA))),
+					WithArtifactLocation(sarif.NewSimpleArtifactLocation(".git/COMMIT_" + textutil.ShortSHA(f.Location.CommitSHA))),
 			)
 			result.AddLocation(loc)
 		}

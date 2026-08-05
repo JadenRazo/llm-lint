@@ -1,6 +1,7 @@
 package fixer_test
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -60,7 +61,7 @@ func TestApply_PreviewDoesNotChangeContentLines(t *testing.T) {
 	}
 
 	res := scan(t, root)
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		Preview: true,
 	})
 	if err != nil {
@@ -131,7 +132,7 @@ func TestApply_PreviewDoesNotUntrackPathFindings(t *testing.T) {
 	runGit(t, root, "add", "CLAUDE.md")
 
 	res := scan(t, root)
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		Preview: true,
 	})
 	if err != nil {
@@ -201,7 +202,7 @@ func TestApply_PreviewDoesNotCleanHeadCommitTrailer(t *testing.T) {
 	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
 
 	res := scanWithGit(t, root)
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		Preview: true,
 	})
 	if err != nil {
@@ -246,7 +247,7 @@ func TestApply_CleansScannedCommitTrailers(t *testing.T) {
 	if len(res.Findings) != 1 || res.Findings[0].Location.CommitSHA != badCommit {
 		t.Fatalf("expected one finding on older commit %s, got %#v", badCommit, res.Findings)
 	}
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		GitHistoryMode: string(fixer.GitHistoryScanned),
 	})
 	if err != nil {
@@ -290,7 +291,7 @@ func TestApply_PreviewDoesNotCleanScannedCommitTrailers(t *testing.T) {
 	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
 
 	res := scanWithGit(t, root)
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		GitHistoryMode: string(fixer.GitHistoryScanned),
 		Preview:        true,
 	})
@@ -325,7 +326,7 @@ func TestApply_GitHistoryNoneLeavesCommitFindingsUnfixable(t *testing.T) {
 	oldHead := strings.TrimSpace(runGit(t, root, "rev-parse", "HEAD"))
 
 	res := scanWithGit(t, root)
-	summary, err := fixer.ApplyWithOptions(root, res.Findings, rules.DefaultRegistry(), fixer.Options{
+	summary, err := fixer.ApplyWithOptions(context.Background(), root, res.Findings, rules.DefaultRegistry(), fixer.Options{
 		GitHistoryMode: string(fixer.GitHistoryNone),
 	})
 	if err != nil {

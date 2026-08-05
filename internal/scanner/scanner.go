@@ -2,8 +2,8 @@ package scanner
 
 import (
 	"bytes"
+	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -28,6 +28,9 @@ type Config interface {
 	IsRuleEnabled(id string) bool
 	EffectiveSeverity(id string, def rules.Severity) rules.Severity
 	IsIgnored(relPath string) bool
+	// IsIgnoredDir reports whether a whole directory can be pruned
+	// (e.g. "vendor/**" prunes the vendor directory itself).
+	IsIgnoredDir(relDir string) bool
 }
 
 type Stats struct {
@@ -73,10 +76,10 @@ func New(cfg Config, allRules map[string]rules.Rule) (*Scanner, error) {
 }
 
 func (s *Scanner) Scan(root string) ([]rules.Match, Stats, error) {
-	return s.ScanWithProgress(root, nil)
+	return s.ScanWithProgress(context.Background(), root, nil)
 }
 
-func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
+func (s *Scanner) ScanWithProgress(ctx context.Context, root string, prog *progress.Reporter) ([]rules.Match, Stats, error) {
 	var stats Stats
 	var (
 		mu      sync.Mutex
@@ -98,7 +101,7 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 			}
 			rel, _ := filepath.Rel(absRoot, path)
 			relSlash := filepath.ToSlash(rel)
-			if rel != "." && s.cfg.IsIgnored(relSlash+"/") {
+			if rel != "." && s.cfg.IsIgnoredDir(relSlash) {
 				return filepath.SkipDir
 			}
 			if gi.match(relSlash, true) {
@@ -159,13 +162,13 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) ([]rule
 	}
 
 	errCb := walker.WithErrorCallback(func(_ string, err error) error {
-		if errors_isPermission(err) || errors_isNotExist(err) {
+		if os.IsPermission(err) || os.IsNotExist(err) {
 			return nil
 		}
 		return err
 	})
 
-	if err := walker.Walk(absRoot, walkFn, errCb); err != nil {
+	if err := walker.WalkWithContext(ctx, absRoot, walkFn, errCb); err != nil {
 		return nil, stats, err
 	}
 	return matches, stats, nil
@@ -252,8 +255,3 @@ func applySeverity(r rules.Rule, cfg Config) rules.Rule {
 	r.Severity = cfg.EffectiveSeverity(r.ID, r.Severity)
 	return r
 }
-
-func errors_isPermission(err error) bool { return os.IsPermission(err) }
-func errors_isNotExist(err error) bool   { return os.IsNotExist(err) }
-
-var _ = fs.ModeSymlink
