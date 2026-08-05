@@ -148,7 +148,7 @@ func (c *Config) validate(path string) error {
 	}
 	for id, ov := range c.Rules {
 		if _, ok := rules.Get(id); !ok {
-			return fmt.Errorf("%s: unknown rule id %q under rules:", path, id)
+			return fmt.Errorf("%s: unknown rule id %q in rules section", path, id)
 		}
 		if ov.Severity != "" && !ov.Severity.Valid() {
 			return fmt.Errorf("%s: invalid severity %q for rule %s (want error|warning|info)", path, ov.Severity, id)
