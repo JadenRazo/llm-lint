@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -21,7 +22,19 @@ import (
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
 
-var version = "dev"
+// Build metadata, injected via -ldflags at release time (see Makefile and
+// .goreleaser.yaml). Defaults describe a plain `go build`.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
+
+// versionString is the long-form version line shared by `llm-lint version`
+// and `llm-lint --version`.
+func versionString() string {
+	return fmt.Sprintf("llm-lint %s (commit %s, built %s, %s)", version, commit, date, runtime.Version())
+}
 
 // Exit codes. Documented in README.md; keep the two lists in sync.
 const (
@@ -68,16 +81,28 @@ func newRoot() *cobra.Command {
 		Short:         "Catch LLM artifacts (CLAUDE.md, Co-authored-by trailers, .cursorrules, etc.) in your codebase.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Setting Version gives the root command a --version flag.
+		Version: version,
 	}
+	root.SetVersionTemplate(versionString() + "\n")
 	root.AddCommand(newScanCmd())
 	root.AddCommand(newRulesCmd())
 	root.AddCommand(newHookCmd())
 	root.AddCommand(newBaselineCmd())
-	root.AddCommand(&cobra.Command{
+	versionCmd := &cobra.Command{
 		Use:   "version",
-		Short: "Print version",
-		Run:   func(_ *cobra.Command, _ []string) { fmt.Println(version) },
-	})
+		Short: "Print version and build metadata",
+		Run: func(cmd *cobra.Command, _ []string) {
+			if short, _ := cmd.Flags().GetBool("short"); short {
+				// Bare version string, for scripts that parse the output.
+				fmt.Println(version)
+				return
+			}
+			fmt.Println(versionString())
+		},
+	}
+	versionCmd.Flags().Bool("short", false, "print just the version number")
+	root.AddCommand(versionCmd)
 	return root
 }
 

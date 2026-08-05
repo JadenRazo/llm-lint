@@ -10,9 +10,10 @@ Available Commands:
   hook        Install, uninstall, or inspect the llm-lint pre-commit hook
   rules       List or describe rules
   scan        Scan a repository for LLM artifacts
-  version     Print version
+  version     Print version and build metadata
 
 Flags:
-  -h, --help   help for llm-lint
+  -h, --help      help for llm-lint
+  -v, --version   version for llm-lint
 
 Use "llm-lint [command] --help" for more information about a command.

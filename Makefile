@@ -1,10 +1,13 @@
 VERSION ?= dev
+COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 NPM_VERSION ?= 0.0.0-local
+LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.date=$(DATE)
 
 .PHONY: build test cover lint fmt docker run clean npm-build npm-test npm-publish-dry
 
 build:
-	go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o bin/llm-lint ./cmd/llm-lint
+	go build -trimpath -ldflags "$(LDFLAGS)" -o bin/llm-lint ./cmd/llm-lint
 
 test:
 	go test -race -coverprofile=coverage.out ./...
