@@ -94,8 +94,11 @@ func Load(configPath, root string) (*Config, error) {
 		}
 		return nil, fmt.Errorf("read %s: %w", full, err)
 	}
-	if err := yaml.Unmarshal(data, cfg); err != nil {
+	if err := yaml.UnmarshalStrict(data, cfg); err != nil {
 		return nil, fmt.Errorf("parse %s: %w", full, err)
+	}
+	if err := cfg.validate(full); err != nil {
+		return nil, err
 	}
 	if cfg.Rules == nil {
 		cfg.Rules = map[string]RuleOverride{}
@@ -128,6 +131,39 @@ func Load(configPath, root string) (*Config, error) {
 	return cfg, nil
 }
 
+// validate rejects config values that would otherwise fail silently: a
+// typo'd rule ID re-enables a rule the team meant to disable, an unknown
+// category disables every rule, and an unknown severity drops findings out
+// of every summary bucket. All of these are silent false negatives, so they
+// are load errors, not warnings.
+func (c *Config) validate(path string) error {
+	if c.Version != 0 && c.Version != 1 {
+		return fmt.Errorf("%s: unsupported config version %d (this build supports version 1)", path, c.Version)
+	}
+	for _, cat := range c.Categories {
+		if !rules.ValidCategory(cat) {
+			return fmt.Errorf("%s: unknown category %q (known: %v)", path, cat, rules.AllCategories())
+		}
+	}
+	for id, ov := range c.Rules {
+		if _, ok := rules.Get(id); !ok {
+			return fmt.Errorf("%s: unknown rule id %q under rules:", path, id)
+		}
+		if ov.Severity != "" && !ov.Severity.Valid() {
+			return fmt.Errorf("%s: invalid severity %q for rule %s (want error|warning|info)", path, ov.Severity, id)
+		}
+	}
+	if c.FailOn != "" && !c.FailOn.Valid() {
+		return fmt.Errorf("%s: invalid fail_on %q (want error|warning|info)", path, c.FailOn)
+	}
+	for _, pat := range c.Ignore {
+		if !doublestar.ValidatePattern(pat) {
+			return fmt.Errorf("%s: invalid ignore glob %q", path, pat)
+		}
+	}
+	return nil
+}
+
 // CLIOverrides bundles per-invocation flags that override values from the
 // config file. Future flags add new fields here so we don't churn the
 // ApplyCLIOverrides signature on every CLI addition.
@@ -148,14 +184,22 @@ func (c *Config) ApplyCLIOverrides(o CLIOverrides) error {
 		return errors.New("--staged-only and --since are mutually exclusive")
 	}
 	for _, id := range o.Includes {
-		if id != "" {
-			c.includeRules[id] = true
+		if id == "" {
+			continue
 		}
+		if _, ok := rules.Get(id); !ok {
+			return fmt.Errorf("unknown rule id %q in --include", id)
+		}
+		c.includeRules[id] = true
 	}
 	for _, id := range o.Excludes {
-		if id != "" {
-			c.excludeRules[id] = true
+		if id == "" {
+			continue
 		}
+		if _, ok := rules.Get(id); !ok {
+			return fmt.Errorf("unknown rule id %q in --exclude", id)
+		}
+		c.excludeRules[id] = true
 	}
 	c.noGit = o.NoGit
 	c.since = o.Since
@@ -263,7 +307,10 @@ func (c *Config) EffectiveSeverity(id string, def rules.Severity) rules.Severity
 
 func (c *Config) IsIgnored(relPath string) bool {
 	for _, pat := range c.Ignore {
-		if ok, _ := doublestar.PathMatch(pat, relPath); ok {
+		// Match (not PathMatch): callers pass slash-normalized paths, and
+		// PathMatch would split on the OS separator, breaking Windows.
+		// Patterns are validated at load time, so the error is impossible.
+		if ok, _ := doublestar.Match(pat, relPath); ok {
 			return true
 		}
 	}

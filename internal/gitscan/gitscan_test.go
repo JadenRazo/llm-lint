@@ -21,10 +21,10 @@ type testCfg struct {
 	depth    int
 }
 
-func (c *testCfg) IsRuleEnabled(id string) bool                              { return !c.disabled[id] }
+func (c *testCfg) IsRuleEnabled(id string) bool                                  { return !c.disabled[id] }
 func (c *testCfg) EffectiveSeverity(_ string, def rules.Severity) rules.Severity { return def }
-func (c *testCfg) HistoryDepth() int                                         { return c.depth }
-func (c *testCfg) Since() string                                             { return c.since }
+func (c *testCfg) HistoryDepth() int                                             { return c.depth }
+func (c *testCfg) Since() string                                                 { return c.since }
 
 func makeRepo(t *testing.T, commits []commit) string {
 	t.Helper()
@@ -70,17 +70,17 @@ type commit struct {
 func TestGitScan_DetectsClaudeTrailer(t *testing.T) {
 	root := makeRepo(t, []commit{
 		{
-			msg: "feat: clean commit\n\nNothing here.\n",
+			msg:         "feat: clean commit\n\nNothing here.\n",
 			fileContent: "x", author: "Alice", email: "alice@corp.example",
 		},
 		{
-			msg: "feat: dirty commit\n\nLooks nice.\n\nCo-authored-by: Claude <noreply@anthropic.com>\n",
+			msg:         "feat: dirty commit\n\nLooks nice.\n\nCo-authored-by: Claude <noreply@anthropic.com>\n",
 			fileContent: "y", author: "Bob", email: "bob@corp.example",
 		},
 	})
 
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -113,7 +113,7 @@ func TestGitScan_HumanNamedClaude_NotFlagged(t *testing.T) {
 		},
 	})
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -128,12 +128,12 @@ func TestGitScan_HumanNamedClaude_NotFlagged(t *testing.T) {
 func TestGitScan_DetectsClaudeMessageFooter(t *testing.T) {
 	root := makeRepo(t, []commit{
 		{
-			msg: "feat: thing\n\n🤖 Generated with [Claude Code](https://claude.com/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n",
+			msg:         "feat: thing\n\n🤖 Generated with [Claude Code](https://claude.com/code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\n",
 			fileContent: "z", author: "Carol", email: "carol@corp.example",
 		},
 	})
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -153,12 +153,12 @@ func TestGitScan_DetectsClaudeMessageFooter(t *testing.T) {
 func TestGitScan_DetectsCopilotTrailer(t *testing.T) {
 	root := makeRepo(t, []commit{
 		{
-			msg: "feat: do thing\n\nCo-authored-by: GitHub Copilot <copilot@github.com>\n",
+			msg:         "feat: do thing\n\nCo-authored-by: GitHub Copilot <copilot@github.com>\n",
 			fileContent: "p", author: "Dan", email: "dan@corp.example",
 		},
 	})
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestGitScan_CleanRepo_NoFindings(t *testing.T) {
 		{msg: "fix: also clean\n\nSigned-off-by: Eve <eve@corp.example>\n", fileContent: "b", author: "Eve", email: "eve@corp.example"},
 	})
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -193,7 +193,7 @@ func TestGitScan_CleanRepo_NoFindings(t *testing.T) {
 func TestGitScan_NotARepo_ReturnsErr(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &testCfg{depth: 100}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	_, err := s.Scan(dir)
 	if err == nil {
 		t.Errorf("expected error scanning non-git dir")
@@ -211,7 +211,7 @@ func TestGitScan_DepthLimit(t *testing.T) {
 	}
 	root := makeRepo(t, commits)
 	cfg := &testCfg{depth: 3}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -248,4 +248,13 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+func mustNewScanner(t *testing.T, cfg gitscan.Config) *gitscan.Scanner {
+	t.Helper()
+	s, err := gitscan.New(rules.DefaultRegistry(), cfg)
+	if err != nil {
+		t.Fatalf("gitscan.New: %v", err)
+	}
+	return s
 }

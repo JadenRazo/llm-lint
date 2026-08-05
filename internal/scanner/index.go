@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	git "github.com/go-git/go-git/v5"
+	"github.com/go-git/go-git/v5/plumbing"
 	"github.com/go-git/go-git/v5/plumbing/filemode"
 	"golang.org/x/sync/errgroup"
 
@@ -18,6 +19,26 @@ import (
 )
 
 const indexWorkers = 16
+
+// readBlob reads a full blob from the object store, returning an error for
+// any failure (missing object, reader error, short read) so callers can
+// count the file as unreadable instead of silently treating it as clean.
+func readBlob(repo *git.Repository, hash plumbing.Hash) ([]byte, error) {
+	blob, err := repo.BlobObject(hash)
+	if err != nil {
+		return nil, err
+	}
+	rc, err := blob.Reader()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	data, err := io.ReadAll(rc)
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
 
 // ScanIndex walks the git index instead of the working tree. It scans the
 // staged blob bytes for content rules, so a user who fixed a file but did
@@ -97,15 +118,13 @@ schedule:
 			}
 
 			if len(s.contentRules) > 0 && int64(entry.Size) <= maxContentSize {
-				blob, err := repo.BlobObject(entry.Hash)
-				if err == nil {
-					rc, err := blob.Reader()
-					if err == nil {
-						data, _ := io.ReadAll(rc)
-						_ = rc.Close()
-						local = append(local, s.applyContentRules(rel, data)...)
-						atomic.AddInt64(&stats.BytesRead, int64(len(data)))
-					}
+				data, err := readBlob(repo, entry.Hash)
+				if err != nil {
+					// A truncated or unreadable blob must not pass as clean.
+					atomic.AddInt64(&stats.FilesUnreadable, 1)
+				} else {
+					local = append(local, s.applyContentRules(rel, data)...)
+					atomic.AddInt64(&stats.BytesRead, int64(len(data)))
 				}
 			}
 

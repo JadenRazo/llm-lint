@@ -27,12 +27,15 @@ type Result struct {
 	Matches        []rules.Match
 	CommitsScanned int
 	Shallow        bool
+	// SinceUnresolved holds the --since ref when it could not be resolved,
+	// in which case the scan covered full history (bounded by depth).
+	SinceUnresolved string
 }
 
 type Scanner struct {
-	cfg            Config
-	trailerRules   []compiledRule
-	messageRules   []compiledRule
+	cfg          Config
+	trailerRules []compiledRule
+	messageRules []compiledRule
 }
 
 type compiledRule struct {
@@ -40,7 +43,7 @@ type compiledRule struct {
 	patterns []*regexp.Regexp
 }
 
-func New(allRules map[string]rules.Rule, cfg Config) *Scanner {
+func New(allRules map[string]rules.Rule, cfg Config) (*Scanner, error) {
 	s := &Scanner{cfg: cfg}
 	for _, r := range allRules {
 		if !cfg.IsRuleEnabled(r.ID) {
@@ -48,23 +51,34 @@ func New(allRules map[string]rules.Rule, cfg Config) *Scanner {
 		}
 		switch r.Kind {
 		case rules.KindGitTrailer:
-			s.trailerRules = append(s.trailerRules, compileRule(r, r.TrailerPatterns))
+			cr, err := compileRule(r, r.TrailerPatterns)
+			if err != nil {
+				return nil, err
+			}
+			s.trailerRules = append(s.trailerRules, cr)
 		case rules.KindGitMessage:
-			s.messageRules = append(s.messageRules, compileRule(r, r.MessagePatterns))
+			cr, err := compileRule(r, r.MessagePatterns)
+			if err != nil {
+				return nil, err
+			}
+			s.messageRules = append(s.messageRules, cr)
 		}
 	}
-	return s
+	return s, nil
 }
 
-func compileRule(r rules.Rule, patterns []string) compiledRule {
+// compileRule fails loudly on an invalid pattern: silently dropping it would
+// disable the rule with zero signal, which is a false negative in a linter.
+func compileRule(r rules.Rule, patterns []string) (compiledRule, error) {
 	out := compiledRule{rule: r}
 	for _, p := range patterns {
 		re, err := regexp.Compile(p)
-		if err == nil {
-			out.patterns = append(out.patterns, re)
+		if err != nil {
+			return out, fmt.Errorf("rule %s: invalid regex %q: %w", r.ID, p, err)
 		}
+		out.patterns = append(out.patterns, re)
 	}
-	return out
+	return out, nil
 }
 
 func (s *Scanner) Scan(root string) (*Result, error) {
@@ -93,7 +107,11 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) (*Resul
 
 	head, err := repo.Head()
 	if err != nil {
-		return res, nil
+		if errors.Is(err, plumbing.ErrReferenceNotFound) {
+			// Empty repository (no commits yet): nothing to scan.
+			return res, nil
+		}
+		return res, fmt.Errorf("resolve HEAD: %w", err)
 	}
 
 	var sinceHash *plumbing.Hash
@@ -101,6 +119,11 @@ func (s *Scanner) ScanWithProgress(root string, prog *progress.Reporter) (*Resul
 		h, err := repo.ResolveRevision(plumbing.Revision(since))
 		if err == nil {
 			sinceHash = h
+		} else {
+			// Deliberate fallback to a full-history scan (never scan less
+			// than asked), but surfaced so the user knows the boundary was
+			// not honored.
+			res.SinceUnresolved = since
 		}
 	}
 

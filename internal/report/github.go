@@ -448,4 +448,3 @@ func (r *GitHubReporter) postPRComment(body string) error {
 	}
 	return c.postSticky(ctx, wrapped)
 }
-

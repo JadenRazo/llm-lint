@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -19,11 +20,38 @@ import (
 
 var version = "dev"
 
+// Exit codes. Documented in README.md; keep the two lists in sync.
+const (
+	exitOK            = 0
+	exitThreshold     = 1 // findings at or above --fail-on
+	exitInternal      = 2 // config, IO, or internal error
+	exitStaleBaseline = 3 // baseline has stale entries and stale_action=fail
+)
+
+// exitCodeError carries a specific process exit code up to main() so that
+// command logic never calls os.Exit directly (which would skip deferred
+// cleanup and make the paths untestable).
+type exitCodeError struct {
+	code int
+	msg  string
+}
+
+func (e *exitCodeError) Error() string { return e.msg }
+
 func main() {
-	if err := newRoot().Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(2)
+	err := newRoot().Execute()
+	if err == nil {
+		os.Exit(exitOK)
 	}
+	var ec *exitCodeError
+	if errors.As(err, &ec) {
+		if ec.msg != "" {
+			fmt.Fprintln(os.Stderr, ec.msg)
+		}
+		os.Exit(ec.code)
+	}
+	fmt.Fprintln(os.Stderr, "error:", err)
+	os.Exit(exitInternal)
 }
 
 func newRoot() *cobra.Command {
@@ -125,6 +153,19 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Resolve effective --fail-on: CLI flag wins, then config-file fail_on,
+	// then the default "error" baked into config.Load. Empty flag default
+	// lets us tell "user didn't pass it" apart from "user passed error".
+	// Validated here, before any scanning or report writing, so a bad value
+	// fails fast instead of after a full (possibly slow) scan.
+	failOn, _ := cmd.Flags().GetString("fail-on")
+	if failOn == "" {
+		failOn = string(cfg.FailOn)
+	}
+	if err := engine.ValidateFailOn(failOn); err != nil {
+		return err
+	}
+
 	noProgress, _ := cmd.Flags().GetBool("no-progress")
 	prog := progress.New(os.Stderr, !noProgress)
 
@@ -187,21 +228,14 @@ func runScan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Resolve effective --fail-on: CLI flag wins, then config-file fail_on,
-	// then the default "error" baked into config.Load. Empty flag default
-	// lets us tell "user didn't pass it" apart from "user passed error".
-	failOn, _ := cmd.Flags().GetString("fail-on")
-	if failOn == "" {
-		failOn = string(cfg.FailOn)
-	}
-	if err := engine.ValidateFailOn(failOn); err != nil {
-		return err
-	}
 	if engine.ExceedsThreshold(res, failOn) {
-		os.Exit(1)
+		return &exitCodeError{code: exitThreshold}
 	}
 	if cfg.BaselineStaleAction() == "fail" && res.StaleBaselineCount > 0 {
-		os.Exit(1)
+		return &exitCodeError{
+			code: exitStaleBaseline,
+			msg:  fmt.Sprintf("baseline: %d stale entries (run `llm-lint baseline prune` or rerun `baseline create`)", res.StaleBaselineCount),
+		}
 	}
 	return nil
 }

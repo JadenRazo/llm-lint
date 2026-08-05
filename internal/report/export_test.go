@@ -25,4 +25,3 @@ func SetGitHubReporterFields(r *GitHubReporter, w io.Writer, env func(string) st
 	r.env = env
 	r.stderr = io.Discard
 }
-

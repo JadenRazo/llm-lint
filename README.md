@@ -82,6 +82,7 @@ Exit codes:
 - `0` — no findings at or above `--fail-on` severity (default `error`)
 - `1` — findings exceeded threshold
 - `2` — internal error (bad config, IO, etc.)
+- `3` — baseline has stale entries and `baseline.stale_action` is `fail` (or `--baseline-stale-fail`)
 
 ## Auto-fix
 

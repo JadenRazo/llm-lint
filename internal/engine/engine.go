@@ -17,11 +17,13 @@ type Result struct {
 	Findings           []findings.Finding `json:"findings"`
 	Summary            findings.Summary   `json:"summary"`
 	FilesScanned       int64              `json:"files_scanned"`
+	FilesUnreadable    int64              `json:"files_unreadable,omitempty"`
 	CommitsScanned     int                `json:"commits_scanned"`
 	DurationMS         int64              `json:"duration_ms"`
 	GitShallow         bool               `json:"git_shallow,omitempty"`
 	GitSkipped         bool               `json:"git_skipped,omitempty"`
 	GitSkippedNote     string             `json:"git_skipped_note,omitempty"`
+	SinceUnresolved    string             `json:"since_unresolved,omitempty"`
 	BaselinePath       string             `json:"baseline_path,omitempty"`
 	BaselineLoaded     bool               `json:"baseline_loaded,omitempty"`
 	BaselinedCount     int                `json:"baselined_count,omitempty"`
@@ -77,10 +79,14 @@ func (e *Engine) Run(root string) (*Result, error) {
 			res.Findings = append(res.Findings, findings.FromMatch(m))
 		}
 		res.FilesScanned = stats.FilesScanned
+		res.FilesUnreadable = stats.FilesUnreadable
 	}
 
 	if e.cfg.GitEnabled() && !e.cfg.StagedOnly() {
-		gs := gitscan.New(e.allRules, e.cfg)
+		gs, err := gitscan.New(e.allRules, e.cfg)
+		if err != nil {
+			return nil, fmt.Errorf("gitscan init: %w", err)
+		}
 		if e.prog != nil {
 			e.prog.Phase("git")
 		}
@@ -91,6 +97,7 @@ func (e *Engine) Run(root string) (*Result, error) {
 		} else {
 			res.GitShallow = gres.Shallow
 			res.CommitsScanned = gres.CommitsScanned
+			res.SinceUnresolved = gres.SinceUnresolved
 			for _, m := range gres.Matches {
 				res.Findings = append(res.Findings, findings.FromMatch(m))
 			}

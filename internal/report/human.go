@@ -37,6 +37,12 @@ func (r *HumanReporter) Write(res *engine.Result) error {
 	if res.GitSkipped && res.GitSkippedNote != "" {
 		fmt.Fprintln(r.w, c.dim("note: git scan skipped: "+res.GitSkippedNote))
 	}
+	if res.FilesUnreadable > 0 {
+		fmt.Fprintln(r.w, c.warn(fmt.Sprintf("warning: %d files could not be read and were not scanned", res.FilesUnreadable)))
+	}
+	if res.SinceUnresolved != "" {
+		fmt.Fprintln(r.w, c.warn(fmt.Sprintf("warning: --since ref %q could not be resolved; scanned full history instead", res.SinceUnresolved)))
+	}
 	if res.BaselineLoaded {
 		fmt.Fprintln(r.w, c.dim(fmt.Sprintf("baseline: %s (%d matched)", res.BaselinePath, res.BaselinedCount)))
 	}

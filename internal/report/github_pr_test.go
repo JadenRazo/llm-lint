@@ -20,12 +20,12 @@ type stubServer struct {
 	t  *testing.T
 	mu sync.Mutex
 
-	listReturns    []listReturn
-	createCalls    []map[string]string
-	editCalls      map[int]string
-	listURL        string
-	respMethod     string // last seen
-	server         *httptest.Server
+	listReturns []listReturn
+	createCalls []map[string]string
+	editCalls   map[int]string
+	listURL     string
+	respMethod  string // last seen
+	server      *httptest.Server
 }
 
 type listReturn struct {

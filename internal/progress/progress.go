@@ -159,7 +159,7 @@ func (r *Reporter) render() {
 			if scanned > 0 && elapsed > 200*time.Millisecond {
 				rate := float64(scanned) / elapsed.Seconds()
 				if rate > 0 && scanned < total {
-					remaining := time.Duration(float64(total-scanned)/rate * float64(time.Second))
+					remaining := time.Duration(float64(total-scanned) / rate * float64(time.Second))
 					eta = " ETA " + humanDur(remaining)
 				}
 			}

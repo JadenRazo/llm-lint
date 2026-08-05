@@ -9,9 +9,6 @@ import (
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 
-	"github.com/JadenRazo/llm-lint/internal/gitscan"
-	"github.com/JadenRazo/llm-lint/internal/rules"
-
 	_ "github.com/JadenRazo/llm-lint/internal/rules/builtin"
 )
 
@@ -59,7 +56,7 @@ func TestGitScan_SinceFlag_StopsAtBoundary(t *testing.T) {
 	boundary := hashes[1]
 
 	cfg := &testCfg{depth: 100, since: boundary}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
@@ -101,7 +98,7 @@ func TestGitScan_SinceFlag_UnknownRef_FallsBackToFullScan(t *testing.T) {
 	// (e.g. erroring on bad --since) shows up in CI rather than silently
 	// changing the contract.
 	cfg := &testCfg{depth: 100, since: "v999.999.999-nope"}
-	s := gitscan.New(rules.DefaultRegistry(), cfg)
+	s := mustNewScanner(t, cfg)
 	res, err := s.Scan(root)
 	if err != nil {
 		t.Fatal(err)
