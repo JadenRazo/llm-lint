@@ -72,3 +72,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   golangci-lint-action v9, goreleaser-action v7, cosign-installer v4,
   Node.js 24, go-sarif); workflows run with explicit least-privilege
   permissions and timeouts.
+- **Release signing now emits a Sigstore bundle.** Releases ship
+  `checksums.txt.bundle` (signature + certificate in one file) instead of the
+  separate `checksums.txt.sig` and `checksums.txt.pem`. cosign v3 — pulled in
+  by the `cosign-installer` v4 bump above — removed `--output-signature` and
+  `--output-certificate`, leaving `--bundle` as the only way to emit
+  verification material. Verify with
+  `cosign verify-blob --bundle checksums.txt.bundle ... checksums.txt`; see
+  [SECURITY.md](./SECURITY.md), which also documents verifying pre-v0.4.0
+  releases that still use the two-file form.

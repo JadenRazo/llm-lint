@@ -48,18 +48,24 @@ Out of scope:
 Each release includes:
 
 - `checksums.txt` — SHA-256 of every archive
-- `checksums.txt.sig` and `checksums.txt.pem` — cosign signature and certificate
+- `checksums.txt.bundle` — cosign Sigstore bundle (signature + certificate in one file)
 - `*.spdx.json` — SBOM per archive
 
 Verify with:
 
 ```sh
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.bundle \
   --certificate-identity-regexp 'https://github.com/JadenRazo/llm-lint/.+' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   checksums.txt
 ```
+
+> **Releases before v0.4.0** shipped separate `checksums.txt.sig` and
+> `checksums.txt.pem` files instead of a bundle. To verify those, swap
+> `--bundle checksums.txt.bundle` for
+> `--certificate checksums.txt.pem --signature checksums.txt.sig`.
+> The change came with cosign v3, which removed the flags that emitted the
+> separate files.
 
 Container images (`ghcr.io/jadenrazo/llm-lint:<tag>`) are signed keyless via cosign and verifiable with `cosign verify` against the same OIDC identity.

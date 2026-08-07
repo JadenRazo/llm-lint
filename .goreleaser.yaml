@@ -44,14 +44,14 @@ sboms:
       - "{{ .ArtifactName }}.spdx.json"
 
 signs:
+  # cosign v3 (installed by cosign-installer v4) removed --output-signature and
+  # --output-certificate; --bundle is now the only way to emit verification
+  # material, and it carries both the signature and the certificate.
   - cmd: cosign
-    env:
-      - COSIGN_EXPERIMENTAL=1
-    certificate: '${artifact}.pem'
+    signature: '${artifact}.bundle'
     args:
       - sign-blob
-      - '--output-certificate=${certificate}'
-      - '--output-signature=${signature}'
+      - '--bundle=${signature}'
       - '${artifact}'
       - '--yes'
     artifacts: checksum
