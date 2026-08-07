@@ -110,8 +110,13 @@ jobs:
       - name: Build npm packages
         run: node npm/scripts/build.mjs --version "${GITHUB_REF_NAME#v}"
 
+      # --skip-existing makes this step re-runnable. There are seven packages to
+      # publish (six platform binaries plus the parent), so a failure partway
+      # through - an expired token, a registry blip - would otherwise leave the
+      # earlier ones published and hard-fail every retry on "cannot publish over
+      # previously published version".
       - name: Publish to npm
-        run: node npm/scripts/publish.mjs --version "${GITHUB_REF_NAME#v}" --provenance
+        run: node npm/scripts/publish.mjs --version "${GITHUB_REF_NAME#v}" --provenance --skip-existing
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
