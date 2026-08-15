@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- Build with Go 1.26.6, which fixes four standard-library vulnerabilities that
+  `govulncheck` reports as reachable from this code: GO-2026-6218 (`net/url`),
+  GO-2026-6090 (`crypto/tls`), GO-2026-5972 (`encoding/asn1`) and GO-2026-5026
+  (`net/http`). The v0.4.0 binaries were built with Go 1.26.5 and carry all
+  four.
+
 ### Fixed
 
 - **The published package no longer requires Node 24.** A dependency bot rewrote
