@@ -92,6 +92,34 @@ jobs:
       - name: Run govulncheck
         run: govulncheck ./...
 
+  # The npm distribution is built and published exactly once per release, inside
+  # the job that also cuts the GitHub release - so until now nothing exercised it
+  # on a pull request. That is how Renovate's "update node.js to v24" reached main
+  # having rewritten the *published* package's engines.node from ">=18.20.8" to
+  # ">=24.15.0", which would have made `npx @jadenrazo/llm-lint` fail for every
+  # user on Node 18, 20 or 22 LTS. It sat there for months.
+  #
+  # Everything here is a pure function of the commit: no registry, no network, no
+  # credentials. It is safe as a required status check.
+  npm-dist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.15.0'
+      - name: Syntax-check the packaging scripts
+        run: |
+          set -euo pipefail
+          for f in npm/scripts/*.mjs npm/bin/*.js; do
+            node --check "$f"
+          done
+      - name: Manifest consistency
+        run: node npm/scripts/check-manifests.mjs
+      - name: Packaging smoke build
+        run: node npm/scripts/smoke-build.mjs
+
   dogfood:
     runs-on: ubuntu-latest
     timeout-minutes: 30

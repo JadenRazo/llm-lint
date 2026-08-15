@@ -1,0 +1,138 @@
+name: publish-npm
+
+# Publishes the npm half of a release on its own, from the archives already
+# attached to the GitHub release.
+#
+# release.yml does everything in one job: build, sign, GitHub release, ghcr
+# images, then npm. When only the last step fails there was previously no way to
+# finish the release - re-running goreleaser against an existing tag fails, and
+# moving the tag rewrites a published, signed release. So v0.4.0 sat published on
+# GitHub and missing from npm for over a week.
+#
+# This replays only the npm step, from the exact bytes users already download,
+# with every archive checksum-verified against the release's own checksums.txt.
+# It is safe to run repeatedly: already-published versions are skipped.
+#
+# For a fresh release, prefer dispatching against the tag itself so the npm
+# provenance attestation names the tag rather than the branch:
+#
+#   gh workflow run publish-npm.yml --ref v1.2.3 -f tag=v1.2.3
+#
+# (that requires this workflow file to exist at that tag; for older tags, run it
+# from main and the attestation will name main instead.)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish to npm, e.g. v0.4.0'
+        required: true
+        type: string
+      dist_tag:
+        description: 'npm dist-tag. Blank = latest for a release, next for a prerelease.'
+        required: false
+        type: string
+      dry_run:
+        description: 'Build and validate everything, but do not publish.'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write # npm provenance / trusted publishing
+    steps:
+      - name: Validate the tag input
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # The tag reaches a shell and `gh release download`, so constrain it to
+          # a semver tag rather than trusting dispatch input.
+          if ! printf '%s' "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::tag must look like v1.2.3 or v1.2.3-rc.1, got '$TAG'"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          # The parent package ships bin/llm-lint.js and npm/README.md from the
+          # working tree, so it must be the tree the release was cut from.
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.15.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: npm auth preflight
+        run: node npm/scripts/check-npm-auth.mjs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: npm manifest consistency
+        run: node npm/scripts/check-manifests.mjs
+
+      - name: Download the release archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .release-assets
+          gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --dir .release-assets \
+            --clobber \
+            --pattern 'llm-lint_*.tar.gz' \
+            --pattern 'llm-lint_*.zip' \
+            --pattern 'checksums.txt'
+          ls -la .release-assets
+
+      - name: Extract and checksum-verify the binaries
+        env:
+          TAG: ${{ inputs.tag }}
+        run: node npm/scripts/from-release.mjs --assets .release-assets --out .release-bins --version "${TAG#v}"
+
+      - name: Build npm packages
+        env:
+          TAG: ${{ inputs.tag }}
+        run: node npm/scripts/build.mjs --version "${TAG#v}" --dist .release-bins
+
+      - name: Publish to npm
+        env:
+          TAG: ${{ inputs.tag }}
+          DIST_TAG: ${{ inputs.dist_tag }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: |
+          set -euo pipefail
+          args=(--version "${TAG#v}" --provenance --skip-existing)
+          [ -n "$DIST_TAG" ] && args+=(--tag "$DIST_TAG")
+          [ "$DRY_RUN" = "true" ] && args+=(--dry-run)
+          node npm/scripts/publish.mjs "${args[@]}"
+
+      - name: Verify the release is installable from npm
+        if: ${{ inputs.dry_run != true }}
+        env:
+          TAG: ${{ inputs.tag }}
+        run: node npm/scripts/verify-published.mjs --version "${TAG#v}"
+
+      - name: Confirm npm and GitHub now agree
+        # Only meaningful for the newest release; a backfill of an older tag is
+        # expected to leave `latest` pointing elsewhere, so this reports without
+        # failing the job.
+        if: ${{ always() && inputs.dry_run != true }}
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node npm/scripts/check-release-sync.mjs

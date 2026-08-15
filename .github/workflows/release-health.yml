@@ -1,0 +1,178 @@
+name: release-health
+
+# Answers one question on a schedule: can a user install what this repo says is
+# the latest release?
+#
+# ci.yml answers "is this commit good" and release.yml answers "did this release
+# run succeed". Neither notices the state that actually broke: a release that
+# succeeded on GitHub and never reached npm. That skew produced no red anywhere
+# - the release run had already failed days earlier and scrolled out of view -
+# while the README's npm badge quietly advertised the old version.
+#
+# This job depends on the world (the registry, the GitHub API), so it is
+# deliberately NOT part of ci.yml. A check that can go red without anyone
+# changing a line of code does not belong on a pull request, and mixing the two
+# is how red stops meaning anything.
+
+on:
+  schedule:
+    # Mondays 08:11 America/Los_Angeles (15:11 UTC). Cron here is always UTC.
+    - cron: '11 15 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-health
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      id-token: write # so the auth preflight can exercise the OIDC path
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24.15.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Every check below captures its own exit code instead of using
+      # continue-on-error. continue-on-error rewrites the step's conclusion to
+      # `success`, so the run renders green and `steps.<id>.outcome` becomes the
+      # only place the truth survives - which is easy to then read wrongly.
+      - name: GitHub release vs npm latest
+        id: sync
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set +e
+          node npm/scripts/check-release-sync.mjs 2>&1 | tee sync.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "### Release sync" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat sync.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: npm credential liveness
+        id: auth
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set +e
+          node npm/scripts/check-npm-auth.mjs 2>&1 | tee auth.txt
+          code=${PIPESTATUS[0]}
+          set -e
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "### npm credential" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          cat auth.txt >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      # Installs whatever npm currently serves as `latest` and runs it. Catches
+      # a published-but-broken release: a missing platform package, an
+      # optionalDependencies pin to a version that was never uploaded, an
+      # engines floor that excludes the running Node.
+      - name: Current npm latest is installable
+        id: installable
+        run: |
+          set +e
+          latest=$(npm view @jadenrazo/llm-lint version 2>/dev/null)
+          if [ -z "$latest" ]; then
+            echo "could not read the latest version from the registry"
+            echo "code=2" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          node npm/scripts/verify-published.mjs --version "$latest" --tag latest --timeout 30 2>&1 | tee installable.txt
+          echo "code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Report
+        # `always() &&` is load-bearing. A step `if:` with no status function gets
+        # an implicit success(), so this would silently skip whenever an earlier
+        # step failed - which is exactly when the report is needed.
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SYNC: ${{ steps.sync.outputs.code }}
+          AUTH: ${{ steps.auth.outputs.code }}
+          INSTALLABLE: ${{ steps.installable.outputs.code }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          verdict() { [ "${1:-2}" = "0" ] && echo "ok" || echo "FAILING"; }
+          unhealthy=0
+          for c in "$SYNC" "$AUTH" "$INSTALLABLE"; do
+            [ "${c:-2}" = "0" ] || unhealthy=1
+          done
+
+          {
+            echo "One row per check. This issue is rewritten in place on every run and"
+            echo "closed automatically when everything is green, so it is always current"
+            echo "rather than a pile of stale notifications."
+            echo
+            echo "| Check | Status | What it means |"
+            echo "|---|---|---|"
+            echo "| GitHub release vs npm \`latest\` | $(verdict "$SYNC") | Users installing from npm get the version this repo advertises |"
+            echo "| npm credential | $(verdict "$AUTH") | The next release will be able to publish |"
+            echo "| npm \`latest\` is installable | $(verdict "$INSTALLABLE") | \`npx @jadenrazo/llm-lint\` actually runs |"
+            echo
+            echo "Last checked: $(date -u '+%Y-%m-%d %H:%M UTC') - [run log]($RUN_URL)"
+            echo
+            echo '```'
+            for f in sync.txt auth.txt installable.txt; do
+              [ -f "$f" ] && { echo "--- $f"; cat "$f"; echo; }
+            done
+            echo '```'
+          } > body.md
+
+          # --force makes this idempotent. A `gh issue create --label` against a
+          # label that does not exist fails the whole step, which is how a
+          # sibling repo ended up filing its alarm issues unlabelled.
+          gh label create release-health \
+            --color B60205 \
+            --description "Automated: the published release and the registry disagree" \
+            --force
+
+          existing=$(gh issue list --label release-health --state open --limit 1 --json number --jq '.[0].number // empty')
+
+          if [ "$unhealthy" = "1" ]; then
+            if [ -n "$existing" ]; then
+              gh issue edit "$existing" --body-file body.md
+              echo "updated issue #$existing"
+            else
+              gh issue create \
+                --title "release health: the published release and npm disagree" \
+                --label release-health \
+                --assignee JadenRazo \
+                --body-file body.md
+            fi
+          elif [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "Resolved: all release-health checks are green as of $(date -u '+%Y-%m-%d %H:%M UTC'). [run log]($RUN_URL)"
+            gh issue close "$existing"
+            echo "closed issue #$existing"
+          else
+            echo "all checks green, nothing to report"
+          fi
+
+      - name: Fail the run if release health is degraded
+        if: always()
+        env:
+          SYNC: ${{ steps.sync.outputs.code }}
+          AUTH: ${{ steps.auth.outputs.code }}
+          INSTALLABLE: ${{ steps.installable.outputs.code }}
+        run: |
+          set -euo pipefail
+          rc=0
+          [ "${SYNC:-2}" = "0" ]        || { echo "::error::GitHub release and npm latest disagree"; rc=1; }
+          [ "${AUTH:-2}" = "0" ]        || { echo "::error::npm credential will not publish"; rc=1; }
+          [ "${INSTALLABLE:-2}" = "0" ] || { echo "::error::npm latest is not installable"; rc=1; }
+          exit $rc

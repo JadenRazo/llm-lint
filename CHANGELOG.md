@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The published package no longer requires Node 24.** A dependency bot rewrote
+  `engines.node` in the npm package from `>=18.20.8` to `>=24.15.0`, treating a
+  consumer support floor as a build toolchain pin. Shipping that would have broken
+  `npx @jadenrazo/llm-lint` for every user on Node 18, 20 or 22 LTS. Restored to
+  `>=18.20.8`, and the platform packages now inherit the same value instead of
+  declaring their own.
+
+### Added
+
+- `publish-npm.yml`: replays only the npm publish for an existing release, from
+  the archives attached to it, with every archive checksum-verified against the
+  release's own `checksums.txt`. A failed npm step no longer requires moving a
+  tag or re-running goreleaser.
+- `release-health.yml`: weekly check that npm serves the version GitHub
+  advertises, that the publish credential is still live, and that the current
+  `latest` really installs and runs. Keeps one issue current instead of filing a
+  new one each week.
+- The release job now verifies its npm credential before anything irreversible
+  happens, and installs the published package from the public registry
+  afterwards to confirm it actually works.
+- CI now exercises the npm packaging on every pull request
+  (`check-manifests.mjs`, `smoke-build.mjs`), which is what catches the
+  `engines.node` class of regression above.
+
 ## [0.4.0] - 2026-08-07
 
 ### Added
