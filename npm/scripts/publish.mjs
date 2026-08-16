@@ -16,133 +16,215 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { PARENT_NAME } from "./platforms.mjs";
+import { PARENT_NAME, PLATFORMS, packageNameFor } from "./platforms.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const NPM_DIR = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(NPM_DIR, "..");
 
 function parseArgs(argv) {
-  const out = { dryRun: false, provenance: false, skipExisting: false };
-  for (let i = 2; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--version") out.version = argv[++i];
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--tag") out.tag = argv[++i];
-    else if (a === "--provenance") out.provenance = true;
-    else if (a === "--skip-existing") out.skipExisting = true;
-    else if (a === "--build-dir") out.buildDir = argv[++i];
-    else if (a === "--help" || a === "-h") out.help = true;
-    else throw new Error(`Unknown arg: ${a}`);
-  }
-  return out;
+    const out = { dryRun: false, provenance: false, skipExisting: false };
+    for (let i = 2; i < argv.length; i++) {
+        const a = argv[i];
+        if (a === "--version") out.version = argv[++i];
+        else if (a === "--dry-run") out.dryRun = true;
+        else if (a === "--tag") out.tag = argv[++i];
+        else if (a === "--provenance") out.provenance = true;
+        else if (a === "--skip-existing") out.skipExisting = true;
+        else if (a === "--build-dir") out.buildDir = argv[++i];
+        else if (a === "--help" || a === "-h") out.help = true;
+        else throw new Error(`Unknown arg: ${a}`);
+    }
+    return out;
 }
 
 function help() {
-  process.stdout.write(
-    `Usage: publish.mjs --version <semver> [--tag latest|next|...] [--dry-run]\n` +
-    `                   [--provenance] [--skip-existing] [--build-dir <path>]\n`,
-  );
-  process.exit(0);
+    process.stdout.write(
+        `Usage: publish.mjs --version <semver> [--tag latest|next|...] [--dry-run]\n` +
+            `                   [--provenance] [--skip-existing] [--build-dir <path>]\n`,
+    );
+    process.exit(0);
 }
 
 function autoTag(version) {
-  return /-/.test(version) ? "next" : "latest";
+    return /-/.test(version) ? "next" : "latest";
 }
 
 function listPackages(buildDir) {
-  return fs
-    .readdirSync(buildDir)
-    .map((name) => path.join(buildDir, name))
-    .filter((p) => fs.statSync(p).isDirectory() && fs.existsSync(path.join(p, "package.json")));
+    return fs
+        .readdirSync(buildDir)
+        .map((name) => path.join(buildDir, name))
+        .filter(
+            (p) =>
+                fs.statSync(p).isDirectory() &&
+                fs.existsSync(path.join(p, "package.json")),
+        );
 }
 
 function readName(pkgDir) {
-  return JSON.parse(fs.readFileSync(path.join(pkgDir, "package.json"), "utf8")).name;
+    return JSON.parse(
+        fs.readFileSync(path.join(pkgDir, "package.json"), "utf8"),
+    ).name;
 }
 
 function isParent(pkgDir) {
-  return readName(pkgDir) === PARENT_NAME;
+    return readName(pkgDir) === PARENT_NAME;
 }
 
 function alreadyPublished(name, version) {
-  const r = spawnSync("npm", ["view", `${name}@${version}`, "version", "--silent"], {
-    encoding: "utf8",
-  });
-  return r.status === 0 && r.stdout.trim() === version;
+    const r = spawnSync(
+        "npm",
+        ["view", `${name}@${version}`, "version", "--silent"],
+        {
+            encoding: "utf8",
+        },
+    );
+    return r.status === 0 && r.stdout.trim() === version;
 }
 
 function publish(pkgDir, args) {
-  const name = readName(pkgDir);
-  const cmd = ["publish", "--access", "public"];
-  if (args.dryRun) cmd.push("--dry-run");
-  if (args.provenance && !args.dryRun) cmd.push("--provenance");
-  if (args.tag) cmd.push("--tag", args.tag);
+    const name = readName(pkgDir);
+    const cmd = ["publish", "--access", "public"];
+    if (args.dryRun) cmd.push("--dry-run");
+    if (args.provenance && !args.dryRun) cmd.push("--provenance");
+    if (args.tag) cmd.push("--tag", args.tag);
 
-  if (args.skipExisting && !args.dryRun && alreadyPublished(name, args.version)) {
-    process.stdout.write(`skip ${name}@${args.version} (already published)\n`);
-    return;
-  }
+    if (
+        args.skipExisting &&
+        !args.dryRun &&
+        alreadyPublished(name, args.version)
+    ) {
+        process.stdout.write(
+            `skip ${name}@${args.version} (already published)\n`,
+        );
+        return;
+    }
 
-  process.stdout.write(`\n→ npm ${cmd.join(" ")}    (in ${path.relative(REPO_ROOT, pkgDir)})\n`);
-  const r = spawnSync("npm", cmd, { cwd: pkgDir, stdio: "inherit" });
-  if (r.status !== 0) {
-    process.stderr.write(`error: failed to publish ${name}\n`);
-    process.exit(r.status ?? 1);
-  }
+    process.stdout.write(
+        `\n→ npm ${cmd.join(" ")}    (in ${path.relative(REPO_ROOT, pkgDir)})\n`,
+    );
+    const r = spawnSync("npm", cmd, { cwd: pkgDir, stdio: "inherit" });
+    if (r.status !== 0) {
+        process.stderr.write(`\nerror: failed to publish ${name}\n`);
+        explainPublishFailure(name);
+        process.exit(r.status ?? 1);
+    }
+}
+
+/**
+ * npm's auth errors name a problem but not the cause, and the cause here is
+ * almost always per-package configuration.
+ *
+ * This matters more than it looks because of the publish ORDER. The six platform
+ * packages go first and the parent goes last - deliberately, so the parent's
+ * optionalDependencies always point at versions that already exist. But
+ * `@jadenrazo/llm-lint` is the package a human thinks of as "the package", so
+ * configuring only that one leaves all six that publish BEFORE it unconfigured,
+ * and the run dies on the first platform package with a message that mentions
+ * neither trusted publishing nor the other six.
+ *
+ * That is exactly how v0.4.1 failed: ENEEDAUTH on llm-lint-darwin-arm64, with
+ * the parent never reached.
+ */
+function explainPublishFailure(failed) {
+    const usingToken = Boolean((process.env.NODE_AUTH_TOKEN || "").trim());
+    const all = [...PLATFORMS.map(packageNameFor), PARENT_NAME];
+
+    process.stderr.write(
+        `\n` +
+            `  Every one of these ${all.length} packages is published separately and each needs its own\n` +
+            `  publish permission. Platform packages go first; ${PARENT_NAME}\n` +
+            `  goes last, so a failure on a platform package means the parent was never reached.\n\n` +
+            all
+                .map((n) => `    ${n === failed ? "->" : "  "} ${n}`)
+                .join("\n") +
+            `\n\n`,
+    );
+
+    if (usingToken) {
+        process.stderr.write(
+            `  Running in TOKEN mode.\n` +
+                `    EOTP  - the account requires a one-time password for writes and this token\n` +
+                `            does not bypass it. No CI job can supply one. Use trusted publishing,\n` +
+                `            or a classic npm *automation* token.\n` +
+                `    E404  - the token cannot write this package (npm returns 404, not 403, for\n` +
+                `            an unauthorised write to a scoped package).\n`,
+        );
+    } else {
+        process.stderr.write(
+            `  Running in TRUSTED PUBLISHING (OIDC) mode - no token is set.\n` +
+                `    ENEEDAUTH - npm found no credential AND no trusted publisher for the package\n` +
+                `                marked above. A trusted publisher is configured PER PACKAGE, so\n` +
+                `                setting one up for ${PARENT_NAME} alone is not enough.\n\n` +
+                `  For each package listed above:\n` +
+                `    https://www.npmjs.com/package/<name>/access -> Trusted Publisher -> GitHub Actions\n` +
+                `      Organization or user:  JadenRazo\n` +
+                `      Repository:            llm-lint\n` +
+                `      Workflow filename:     the workflow doing the publishing\n` +
+                `                             (publish-npm.yml for a replay, release.yml for a tag push)\n`,
+        );
+    }
 }
 
 function main() {
-  const args = parseArgs(process.argv);
-  if (args.help) help();
-  if (!args.version) {
-    process.stderr.write("error: --version is required\n");
-    process.exit(2);
-  }
-  args.version = args.version.replace(/^v/, "");
-  if (!args.tag) args.tag = autoTag(args.version);
-
-  const buildDir = path.resolve(args.buildDir ?? path.join(NPM_DIR, "build"));
-  if (!fs.existsSync(buildDir)) {
-    process.stderr.write(`error: build directory not found: ${buildDir}\n`);
-    process.stderr.write(`run: node npm/scripts/build.mjs --version ${args.version}\n`);
-    process.exit(2);
-  }
-
-  const all = listPackages(buildDir);
-  if (all.length === 0) {
-    process.stderr.write(`error: no packages found in ${buildDir}\n`);
-    process.exit(2);
-  }
-
-  // Verify every package has the requested version before publishing any.
-  for (const dir of all) {
-    const pj = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
-    if (pj.version !== args.version) {
-      process.stderr.write(
-        `error: ${pj.name} has version ${pj.version}, expected ${args.version}.\n` +
-        `       rebuild with: node npm/scripts/build.mjs --version ${args.version}\n`,
-      );
-      process.exit(2);
+    const args = parseArgs(process.argv);
+    if (args.help) help();
+    if (!args.version) {
+        process.stderr.write("error: --version is required\n");
+        process.exit(2);
     }
-  }
+    args.version = args.version.replace(/^v/, "");
+    if (!args.tag) args.tag = autoTag(args.version);
 
-  const platformPkgs = all.filter((p) => !isParent(p));
-  const parentPkgs = all.filter((p) => isParent(p));
-  if (parentPkgs.length !== 1) {
-    process.stderr.write(`error: expected exactly 1 parent package, found ${parentPkgs.length}\n`);
-    process.exit(2);
-  }
+    const buildDir = path.resolve(args.buildDir ?? path.join(NPM_DIR, "build"));
+    if (!fs.existsSync(buildDir)) {
+        process.stderr.write(`error: build directory not found: ${buildDir}\n`);
+        process.stderr.write(
+            `run: node npm/scripts/build.mjs --version ${args.version}\n`,
+        );
+        process.exit(2);
+    }
 
-  process.stdout.write(
-    `Publishing ${platformPkgs.length} platform package(s) + 1 parent at ` +
-    `version ${args.version} (tag: ${args.tag})${args.dryRun ? " [DRY RUN]" : ""}\n`,
-  );
+    const all = listPackages(buildDir);
+    if (all.length === 0) {
+        process.stderr.write(`error: no packages found in ${buildDir}\n`);
+        process.exit(2);
+    }
 
-  for (const dir of platformPkgs) publish(dir, args);
-  publish(parentPkgs[0], args);
+    // Verify every package has the requested version before publishing any.
+    for (const dir of all) {
+        const pj = JSON.parse(
+            fs.readFileSync(path.join(dir, "package.json"), "utf8"),
+        );
+        if (pj.version !== args.version) {
+            process.stderr.write(
+                `error: ${pj.name} has version ${pj.version}, expected ${args.version}.\n` +
+                    `       rebuild with: node npm/scripts/build.mjs --version ${args.version}\n`,
+            );
+            process.exit(2);
+        }
+    }
 
-  process.stdout.write(`\nDone. Try: npx @jadenrazo/llm-lint@${args.version} version\n`);
+    const platformPkgs = all.filter((p) => !isParent(p));
+    const parentPkgs = all.filter((p) => isParent(p));
+    if (parentPkgs.length !== 1) {
+        process.stderr.write(
+            `error: expected exactly 1 parent package, found ${parentPkgs.length}\n`,
+        );
+        process.exit(2);
+    }
+
+    process.stdout.write(
+        `Publishing ${platformPkgs.length} platform package(s) + 1 parent at ` +
+            `version ${args.version} (tag: ${args.tag})${args.dryRun ? " [DRY RUN]" : ""}\n`,
+    );
+
+    for (const dir of platformPkgs) publish(dir, args);
+    publish(parentPkgs[0], args);
+
+    process.stdout.write(
+        `\nDone. Try: npx @jadenrazo/llm-lint@${args.version} version\n`,
+    );
 }
 
 main();
