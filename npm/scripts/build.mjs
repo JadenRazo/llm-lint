@@ -28,22 +28,19 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { PLATFORMS, SCOPE, PARENT_NAME } from "./platforms.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const NPM_DIR = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(NPM_DIR, "..");
 
-const SCOPE = "@jadenrazo";
-const PARENT_NAME = `${SCOPE}/llm-lint`;
-
-// node platform-arch  →  goreleaser  →  npm package suffix  →  binary file ext
-const PLATFORMS = [
-  { node: "linux-x64",    goos: "linux",   goarch: "amd64", suffix: "linux-x64",    ext: "",     os: "linux",  cpu: "x64"   },
-  { node: "linux-arm64",  goos: "linux",   goarch: "arm64", suffix: "linux-arm64",  ext: "",     os: "linux",  cpu: "arm64" },
-  { node: "darwin-x64",   goos: "darwin",  goarch: "amd64", suffix: "darwin-x64",   ext: "",     os: "darwin", cpu: "x64"   },
-  { node: "darwin-arm64", goos: "darwin",  goarch: "arm64", suffix: "darwin-arm64", ext: "",     os: "darwin", cpu: "arm64" },
-  { node: "win32-x64",    goos: "windows", goarch: "amd64", suffix: "win32-x64",    ext: ".exe", os: "win32",  cpu: "x64"   },
-  { node: "win32-arm64",  goos: "windows", goarch: "arm64", suffix: "win32-arm64",  ext: ".exe", os: "win32",  cpu: "arm64" },
-];
+// The supported-Node floor is declared once, in npm/package.json, and every
+// platform package inherits it from there. It used to be hardcoded separately
+// here, and the two copies drifted: a dependency bot bumped the parent to
+// ">=24.15.0" while the platform packages stayed ">=18", which would have made
+// `npx @jadenrazo/llm-lint` fail on every Node 18/20/22 LTS. See
+// npm/scripts/check-manifests.mjs, which fails CI if the floor is raised.
+const ENGINES = JSON.parse(fs.readFileSync(path.join(NPM_DIR, "package.json"), "utf8")).engines;
 
 function parseArgs(argv) {
   const out = {};
@@ -148,7 +145,7 @@ function buildPlatformPackage({ plat, version, binarySrc, outDir }) {
     os: [plat.os],
     cpu: [plat.cpu],
     files: ["bin/", "README.md", "LICENSE"],
-    engines: { node: ">=18" },
+    engines: ENGINES,
   };
   writeJSON(path.join(pkgDir, "package.json"), pkg);
 

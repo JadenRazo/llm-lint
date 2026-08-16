@@ -16,6 +16,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { PARENT_NAME } from "./platforms.mjs";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const NPM_DIR = path.resolve(__dirname, "..");
 const REPO_ROOT = path.resolve(NPM_DIR, "..");
@@ -60,7 +62,7 @@ function readName(pkgDir) {
 }
 
 function isParent(pkgDir) {
-  return readName(pkgDir) === "@jadenrazo/llm-lint";
+  return readName(pkgDir) === PARENT_NAME;
 }
 
 function alreadyPublished(name, version) {

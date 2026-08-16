@@ -17,7 +17,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.5'
+          go-version: '1.26.6'
           cache: true
       - run: go mod verify
       - run: go vet ./...
@@ -32,7 +32,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.5'
+          go-version: '1.26.6'
           cache: true
       - uses: golangci/golangci-lint-action@v9
         with:
@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.5'
+          go-version: '1.26.6'
           cache: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: govulncheck ./...
@@ -61,7 +61,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.5'
+          go-version: '1.26.6'
           cache: true
       - run: go run ./cmd/llm-lint scan --fail-on error
 
@@ -80,8 +80,34 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v6
         with:
-          go-version: '1.26.5'
+          go-version: '1.26.6'
           cache: true
+
+      # Node and the npm credential check come FIRST, before anything
+      # irreversible. Everything below this point - the GitHub release, the
+      # ghcr.io images, the sigstore transparency log entries - cannot be
+      # undone, and on v0.4.0 all of it succeeded while the npm publish at the
+      # very end failed on an expired token. That left GitHub advertising a
+      # release that npm had never heard of. Checking the credential takes about
+      # a second; discovering it is dead at the last step costs a manual
+      # recovery. See npm/scripts/check-npm-auth.mjs.
+      - name: Setup Node for npm publish
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.15.0'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: npm auth preflight
+        run: node npm/scripts/check-npm-auth.mjs
+        env:
+          # Empty when the secret is absent, which check-npm-auth.mjs reads as
+          # "use trusted publishing (OIDC)". Moving to trusted publishing is
+          # therefore just deleting this secret - no workflow change.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: npm manifest consistency
+        run: node npm/scripts/check-manifests.mjs
+
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -101,12 +127,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Setup Node for npm publish
-        uses: actions/setup-node@v6
-        with:
-          node-version: '24.15.0'
-          registry-url: 'https://registry.npmjs.org'
-
       - name: Build npm packages
         run: node npm/scripts/build.mjs --version "${GITHUB_REF_NAME#v}"
 
@@ -120,3 +140,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
+
+      # A green `npm publish` only proves the upload was accepted. This installs
+      # the parent from the public registry the way a user would and runs the
+      # binary, which is the claim that actually matters.
+      - name: Verify the release is installable from npm
+        run: node npm/scripts/verify-published.mjs --version "${GITHUB_REF_NAME#v}"

@@ -92,3 +92,62 @@ internal/progress/  — transient TTY progress line
   `security:`, `chore:`) — the release changelog is generated from them.
 - Keep PRs focused; include verification output (build/vet/test) in the PR
   description.
+
+## Releasing
+
+Pushing a `v*` tag runs `release.yml`, which builds and signs the binaries,
+publishes the GitHub release and the `ghcr.io` image, then publishes seven npm
+packages: one per platform, plus the `@jadenrazo/llm-lint` parent that resolves
+the right binary through `optionalDependencies`.
+
+### Publish authentication
+
+Two supported modes; `npm/scripts/check-npm-auth.mjs` detects which is in use and
+fails at the *top* of the release job if it will not work.
+
+1. **Trusted publishing (OIDC)** — preferred. Nothing expires. Configure it once
+   per package on npmjs.com (*Settings → Trusted Publisher → GitHub Actions*,
+   repository `JadenRazo/llm-lint`, workflow `release.yml`, and again for
+   `publish-npm.yml`), then delete the `NPM_TOKEN` secret. No workflow change is
+   needed: an absent secret selects this mode. Requires npm ≥ 11.5.1 and
+   `permissions: id-token: write`, both already in place.
+2. **`NPM_TOKEN` secret** — a granular access token with read+write on the
+   `@jadenrazo` scope. These have a maximum lifetime, and an expired one is the
+   reason v0.4.0 shipped to GitHub but never to npm: the registry answers an
+   unauthenticated publish with a bare `404`, so the failure reads as "package not
+   found" rather than "your credential died."
+
+### If the npm half fails
+
+Do not move the tag and do not re-run goreleaser — the GitHub release, the
+container image and the sigstore transparency-log entries already exist and
+cannot be withdrawn. Replay only the npm step, from the archives attached to the
+release:
+
+```sh
+gh workflow run publish-npm.yml -f tag=v1.2.3
+```
+
+Every archive is checksum-verified against the release's own `checksums.txt`
+before it is repackaged, already-published versions are skipped, and the run
+finishes by installing the package from the public registry and running it.
+
+### What guards this
+
+| Check | Where | Catches |
+|---|---|---|
+| `check-manifests.mjs` | `ci.yml` | the platform matrix, `optionalDependencies`, the bin dispatch table and goreleaser's build matrix disagreeing; a bot raising the published `engines.node` floor |
+| `smoke-build.mjs` | `ci.yml` | `build.mjs` breaking, discovered on a PR instead of mid-release |
+| `check-npm-auth.mjs` | `release.yml`, `publish-npm.yml`, `release-health.yml` | a dead credential, before anything irreversible runs |
+| `verify-published.mjs` | after every publish | a release that uploads cleanly but cannot actually be installed |
+| `check-release-sync.mjs` | `release-health.yml`, weekly | GitHub advertising a release npm has never heard of |
+
+`release-health.yml` keeps a single issue labelled `release-health` up to date and
+closes it automatically once everything is green, rather than filing a new one
+each week.
+
+**`engines.node` in `npm/package.json` is a consumer support floor, not a build
+toolchain pin.** Raising it drops every user below that version. Dependency bots
+do not know the difference, so `check-manifests.mjs` fails the build if the floor
+moves past Node 18; raising it deliberately means editing that constant in the
+same commit and cutting a major version.
