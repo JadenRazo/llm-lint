@@ -157,8 +157,9 @@ jobs:
       # sees so the next failure is diagnosed rather than inferred.
       - name: Diagnose npm auth resolution
         if: ${{ inputs.debug }}
+        continue-on-error: true
         run: |
-          set -uo pipefail
+          set +e
           echo "--- OIDC environment visible to this step ---"
           echo "ACTIONS_ID_TOKEN_REQUEST_URL set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}${ACTIONS_ID_TOKEN_REQUEST_URL:-no}"
           echo "github.workflow_ref: ${{ github.workflow_ref }}"
@@ -167,11 +168,11 @@ jobs:
           npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
           echo "path: $npmrc"
           [ -f "$npmrc" ] && sed 's/=.*/=<redacted>/' "$npmrc" || echo "(absent)"
-          echo "--- resolved auth config ---"
-          npm config get //registry.npmjs.org/:_authToken 2>&1 | sed 's/^/  authToken: /'
-          npm config get registry 2>&1 | sed 's/^/  registry: /'
+          echo "--- resolved registry ---"
+          npm config get registry 2>&1 | sed 's/^/  registry: /' || true
           echo "--- what npm says about the first package ---"
-          npm view @jadenrazo/llm-lint-darwin-arm64 name version 2>&1 | head -3
+          npm view @jadenrazo/llm-lint-darwin-arm64 name version 2>&1 | head -3 || true
+          echo "(diagnostic complete)"
 
       - name: Publish to npm
         env:
