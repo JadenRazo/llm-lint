@@ -113,6 +113,67 @@ if (who.status !== 0) {
 const user = who.stdout.trim();
 process.stdout.write(`ok: authenticated to ${REGISTRY} as "${user}"\n`);
 
+// A valid token is not the same as a token that can publish.
+//
+// v0.4.1 got all the way to `npm publish` with a freshly minted, entirely valid
+// token and failed with:
+//
+//   npm error code EOTP
+//   npm error This operation requires a one-time password.
+//
+// The account has two-factor authentication set to cover writes, and the token
+// did not bypass it. `npm whoami` is a read, so it succeeded; the provenance
+// statement was even signed and written to the transparency log. Only the PUT
+// demanded an OTP - which no CI job can supply. By then goreleaser had already
+// cut the GitHub release and pushed the container image.
+//
+// So checking the credential is live is necessary but not sufficient: the
+// account's 2FA mode has to be checked too.
+if (process.env.NPM_SKIP_2FA_CHECK !== "1") {
+  const profile = npm(["profile", "get", "--json", "--registry", REGISTRY]);
+  if (profile.status === 0) {
+    let tfa;
+    try {
+      ({ tfa } = JSON.parse(profile.stdout));
+    } catch {
+      tfa = undefined;
+    }
+    // npm reports this as `auth-and-writes` (OTP on publish) or `auth-only`
+    // (OTP on login only), and as false/null when 2FA is off.
+    const mode = typeof tfa === "string" ? tfa : (tfa?.mode ?? null);
+
+    if (mode === "auth-and-writes") {
+      die(
+        `The credential is valid, but this npm account requires a one-time password\n` +
+        `for writes (two-factor mode: "auth-and-writes"), and this token does not\n` +
+        `bypass it. The publish would fail with EOTP after the GitHub release and\n` +
+        `the container image had already been created.\n\n` +
+        `  Fix, in order of preference:\n\n` +
+        `  1. Trusted publishing (OIDC). Not a token at all, so 2FA does not apply,\n` +
+        `     nothing expires, and provenance is automatic. Configure it per package\n` +
+        `     at npmjs.com -> ${SCOPE}/<pkg> -> Settings -> Trusted Publisher\n` +
+        `     (GitHub Actions, repo JadenRazo/llm-lint, workflows release.yml and\n` +
+        `     publish-npm.yml), then DELETE the NPM_TOKEN secret. An absent secret\n` +
+        `     selects OIDC here with no workflow change.\n\n` +
+        `  2. A classic npm *automation* token, which is the one token type that\n` +
+        `     bypasses 2FA for publishing. Note npm is restricting exactly that\n` +
+        `     behaviour - see https://gh.io/npm-gat-bypass2fa-deprecation - so this\n` +
+        `     buys time rather than solving it.\n\n` +
+        `  Set NPM_SKIP_2FA_CHECK=1 to bypass this check if you know the token can\n` +
+        `  publish regardless.`,
+      );
+    }
+
+    process.stdout.write(`ok: account 2FA mode is ${mode ?? "off"}; token publishes will not need an OTP\n`);
+  } else {
+    // Never fail the release over an unreadable profile - report and continue.
+    process.stdout.write(
+      `note: could not read the account profile, so the 2FA mode is unknown.\n` +
+      `      If the publish fails with EOTP, that is the reason.\n`,
+    );
+  }
+}
+
 // Best-effort scope check. `npm access` output shape has changed across npm
 // majors, so a parse failure here is reported and tolerated - whoami already
 // proved the credential is live, which is the failure this preflight exists for.
