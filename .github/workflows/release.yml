@@ -97,6 +97,39 @@ jobs:
           node-version: '24.15.0'
           registry-url: 'https://registry.npmjs.org'
 
+
+      # actions/setup-node with `registry-url` ALWAYS writes
+      #   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+      # into the .npmrc. When there is no token that line resolves to an empty
+      # value, and npm reads "auth is configured for this registry" - so it never
+      # starts the OIDC exchange and instead attempts a classic publish with empty
+      # credentials. The result is `ENEEDAUTH: This command requires you to be
+      # logged in`, which points at the account rather than at this line.
+      #
+      # v0.4.1 failed this way twice with trusted publishers correctly configured.
+      # Known issue: actions/setup-node#1551, npm/documentation#1960, and
+      # npm/cli#9088 for the misleading error.
+      - name: Let npm reach trusted publishing
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "token mode: leaving the .npmrc auth line in place"
+            exit 0
+          fi
+          if [ ! -f "$npmrc" ]; then
+            echo "no .npmrc at $npmrc; nothing to strip"
+            exit 0
+          fi
+          if grep -q '_authToken' "$npmrc"; then
+            sed -i '/_authToken/d' "$npmrc"
+            echo "stripped the empty _authToken line so npm will use OIDC"
+          else
+            echo "no _authToken line present"
+          fi
+
       - name: npm auth preflight
         run: node npm/scripts/check-npm-auth.mjs
         env:
