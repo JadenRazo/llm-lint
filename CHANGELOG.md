@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-16
+
+> v0.4.0 was released on GitHub but never reached npm: the publish failed on an
+> expired registry token, and the registry answers an unauthorised publish to an
+> existing scoped package with a bare 404, so it read as "package not found".
+> v0.4.1 is that release plus the two fixes below, both of which v0.4.0 would
+> have shipped. **v0.4.0 is not on npm and will not be** - install 0.4.1.
+
 ### Security
 
 - Build with Go 1.26.6, which fixes four standard-library vulnerabilities that
