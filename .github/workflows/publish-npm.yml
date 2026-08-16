@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: false
+      debug:
+        description: 'Verbose npm logging, and dump what npm sees for auth/OIDC before publishing.'
+        required: false
+        type: boolean
+        default: false
       auth:
         description: 'How to authenticate the publish. oidc = npm trusted publishing (no token). token = the NPM_TOKEN secret.'
         required: false
@@ -146,6 +151,28 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: node npm/scripts/build.mjs --version "${TAG#v}" --dist .release-bins
 
+      # npm reports ENEEDAUTH both when there is no credential AND when a trusted
+      # publisher does not match the running workflow (npm/cli#9088), which makes
+      # the two indistinguishable from the outside. This prints what npm actually
+      # sees so the next failure is diagnosed rather than inferred.
+      - name: Diagnose npm auth resolution
+        if: ${{ inputs.debug }}
+        run: |
+          set -uo pipefail
+          echo "--- OIDC environment visible to this step ---"
+          echo "ACTIONS_ID_TOKEN_REQUEST_URL set: ${ACTIONS_ID_TOKEN_REQUEST_URL:+yes}${ACTIONS_ID_TOKEN_REQUEST_URL:-no}"
+          echo "github.workflow_ref: ${{ github.workflow_ref }}"
+          echo "github.repository:   ${{ github.repository }}"
+          echo "--- .npmrc npm is using ---"
+          npmrc="${NPM_CONFIG_USERCONFIG:-$HOME/.npmrc}"
+          echo "path: $npmrc"
+          [ -f "$npmrc" ] && sed 's/=.*/=<redacted>/' "$npmrc" || echo "(absent)"
+          echo "--- resolved auth config ---"
+          npm config get //registry.npmjs.org/:_authToken 2>&1 | sed 's/^/  authToken: /'
+          npm config get registry 2>&1 | sed 's/^/  registry: /'
+          echo "--- what npm says about the first package ---"
+          npm view @jadenrazo/llm-lint-darwin-arm64 name version 2>&1 | head -3
+
       - name: Publish to npm
         env:
           TAG: ${{ inputs.tag }}
@@ -158,6 +185,7 @@ jobs:
           # exactly this reason, with trusted publishers already configured.
           NODE_AUTH_TOKEN: ${{ inputs.auth == 'token' && secrets.NPM_TOKEN || '' }}
           NPM_CONFIG_PROVENANCE: "true"
+          NPM_CONFIG_LOGLEVEL: ${{ inputs.debug && 'verbose' || 'notice' }}
         run: |
           set -euo pipefail
           args=(--version "${TAG#v}" --provenance --skip-existing)
