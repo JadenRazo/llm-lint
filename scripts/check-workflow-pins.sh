@@ -17,17 +17,18 @@ while IFS= read -r finding; do
     continue
   fi
   failures+=("${finding}")
-done < <(rg -n --no-heading --glob '*.yml' --glob '*.yaml' \
+done < <(grep -RInE --include='*.yml' --include='*.yaml' \
   '^[[:space:]]*(-[[:space:]]+)?uses:' "${workflow_dir}" || true)
 
 while IFS= read -r finding; do
   [[ -z "${finding}" ]] || failures+=("${finding}")
-done < <(rg -n --no-heading '^FROM ' "${repo_root}/Dockerfile" |
-  rg -v '^.*:FROM [^[:space:]@]+@sha256:[0-9a-f]{64}([[:space:]]+AS[[:space:]]+[^[:space:]]+)?$' || true)
+done < <(grep -n '^FROM ' "${repo_root}/Dockerfile" |
+  grep -Ev '^.*:FROM [^[:space:]@]+@sha256:[0-9a-f]{64}([[:space:]]+AS[[:space:]]+[^[:space:]]+)?$' || true)
 
 while IFS= read -r finding; do
   [[ -z "${finding}" ]] || failures+=("${finding}")
-done < <(rg -n --no-heading 'go install [^[:space:]]+@(latest|main|master|HEAD)([[:space:]]|$)' \
+done < <(grep -RInE --include='*.yml' --include='*.yaml' \
+  'go install [^[:space:]]+@(latest|main|master|HEAD)([[:space:]]|$)' \
   "${workflow_dir}" || true)
 
 if ((${#failures[@]})); then
