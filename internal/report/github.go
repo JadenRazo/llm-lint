@@ -2,6 +2,7 @@ package report
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -426,9 +427,9 @@ func appendToFile(path, content string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
-	_, err = io.WriteString(f, content)
-	return err
+	_, writeErr := io.WriteString(f, content)
+	closeErr := f.Close()
+	return errors.Join(writeErr, closeErr)
 }
 
 // postPRComment attempts to post (or edit) a sticky PR comment. Errors are
