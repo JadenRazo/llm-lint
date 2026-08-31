@@ -1,0 +1,9 @@
+# GO-2026-5932 marks golang.org/x/crypto/openpgp as unsafe and has no fixed
+# x/crypto release. llm-lint does not import that package. x/crypto is present
+# transitively because the maintained github.com/ProtonMail/go-crypto OpenPGP
+# fork uses golang.org/x/crypto/hkdf. The required `govulncheck ./...` CI gate
+# performs call analysis and reports zero reachable vulnerabilities.
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+ignoreUntil = 2027-08-31
+reason = "Affected x/crypto/openpgp packages are not imported; only x/crypto/hkdf is used transitively through the maintained ProtonMail fork, and required govulncheck call analysis reports no reachable vulnerability."

@@ -43,6 +43,10 @@ Out of scope:
 - Issues in third-party Go modules used by `llm-lint` — please report those upstream. Renovate and `govulncheck` cover known CVEs in our CI; if you find a new one, please file with the upstream project too.
 - Best-practice or hardening suggestions that aren't exploitable — open a regular GitHub issue or PR for those.
 
+## Vulnerability scan exceptions
+
+Any OSV exception must live in `osv-scanner.toml` with an evidence-based reason and an expiry date. An exception suppresses dependency-inventory noise only; the required `govulncheck ./...` call-analysis gate remains blocking in CI and releases.
+
 ## Verifying release artifacts
 
 Each release includes:
