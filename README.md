@@ -6,20 +6,11 @@
 [![npm downloads](https://img.shields.io/npm/dm/%40jadenrazo%2Fllm-lint?label=npm%20downloads)](https://www.npmjs.com/package/@jadenrazo/llm-lint)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-A SonarQube/gitleaks-style scanner that catches **LLM artifacts** before they ship to production: `CLAUDE.md`, `.claude/`, `Co-authored-by: Claude` commit trailers, `.cursorrules`, GitHub Copilot config, AI refusal text leaked into source, and more.
+A policy-as-code CLI for repository boundaries around AI-assisted development. It detects local instruction files, tool configuration, leaked boilerplate, and configurable provenance markers before they cross into a published codebase.
 
 ![autofix demo](demo/demo.gif)
 
-For every finding, `llm-lint` tells you **what** it found, **where**, **why it matters**, and **exactly how to prevent it from happening again** (e.g., for Claude trailers: edit `~/.claude/settings.json` and set `"includeCoAuthoredBy": false`).
-
-```
-✗ LLM003  error    Co-authored-by: Claude trailer
-   └─ commit ab12cd3 "feat: add user search" (Alice <alice@corp>)
-      To prevent this on future commits, edit your local Claude Code settings:
-
-          # ~/.claude/settings.json
-          { "includeCoAuthoredBy": false }
-```
+For every finding, `llm-lint` reports **what** it found, **where**, **why it matters**, and a concrete remediation. Teams choose which rules and severities match their publication, disclosure, and retention policies; every built-in rule is configurable.
 
 ## What it catches
 
@@ -42,6 +33,10 @@ For every finding, `llm-lint` tells you **what** it found, **where**, **why it m
 | `LLM015` | info | `.mcp.json` referencing claude-code MCP servers |
 
 Run `llm-lint rules show LLM003` for the full description and remediation of any rule.
+
+### Governance boundary
+
+`llm-lint` reports repository-policy signals; it does not determine authorship. The commit-marker rules support organizations that prohibit automated trailers or generated-by markers in published history. Disable those rules when a project requires or prefers that disclosure. Do not use auto-fix or history rewriting to remove attribution, license notices, co-author credit, or disclosures required by a project, employer, or agreement.
 
 ## Quick start
 
@@ -92,7 +87,7 @@ For deterministic cleanup, run:
 llm-lint scan --fix
 ```
 
-Auto-fix removes matching LLM boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and strips AI trailers/markers from the latest commit message.
+Auto-fix removes matching boilerplate/comment-marker lines, appends safe ignore patterns to `.gitignore`, untracks local AI/tool files with `git rm --cached` while keeping them in your working tree, and can remove configured trailers or markers from the latest commit message.
 
 Preview the same plan without changing files, the git index, or history:
 
@@ -109,7 +104,7 @@ llm-lint scan --fix --fix-git-history scanned  # rewrite all matching scanned co
 llm-lint scan --fix --fix-git-history none     # leave commit findings as manual
 ```
 
-Use `scanned` when you intentionally want to scrub all matching AI traces from the scanned history. This rewrites commit IDs for cleaned commits and their descendants, and rewritten commits will not retain commit signatures, so coordinate before using it on shared branches.
+Use `scanned` only when repository policy permits rewriting every matching finding in the scanned history. This changes commit IDs for cleaned commits and their descendants, and rewritten commits will not retain commit signatures. Preview first, preserve required attribution, and coordinate before using it on shared branches.
 
 ## CI integration
 
@@ -150,15 +145,15 @@ jobs:
   scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with: { fetch-depth: 0 }     # full history; required for trailer rules
-      - run: npx -y @jadenrazo/llm-lint@latest scan --format sarif --output llm-lint.sarif --fail-on error
-      - uses: github/codeql-action/upload-sarif@v3
+      - run: npx -y @jadenrazo/llm-lint@0.4.1 scan --format sarif --output llm-lint.sarif --fail-on error
+      - uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         if: always()
         with: { sarif_file: llm-lint.sarif }
 ```
 
-Pin a specific version (`@jadenrazo/llm-lint@0.2.1`) for reproducible runs.
+The example pins both third-party Actions and `llm-lint` for reproducible runs. Update those pins deliberately when adopting a newer release.
 
 ### GitLab CI
 
