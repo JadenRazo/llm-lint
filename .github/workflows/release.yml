@@ -29,7 +29,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
       - run: go mod verify
       - run: go vet ./...
@@ -45,7 +45,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:
@@ -61,7 +61,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
       - run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
       - run: govulncheck ./...
@@ -76,7 +76,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
       - run: go run ./cmd/llm-lint scan --fail-on error
 
@@ -95,7 +95,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
-          go-version: '1.26.6'
+          go-version: '1.26.9'
           cache: true
 
       # Node and the npm credential check come FIRST, before anything
