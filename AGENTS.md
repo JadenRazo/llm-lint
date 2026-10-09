@@ -30,7 +30,7 @@ requires; configure marker rules instead of removing required notices.
 
 ## Verification and delivery
 
-Use `go.mod` for Go (currently 1.26.6); npm consumers have a separate Node floor
+Use `go.mod` for the Go version; npm consumers have a separate Node floor
 in `npm/package.json`. With existing tools/dependencies, choose focused checks:
 
 ```sh
