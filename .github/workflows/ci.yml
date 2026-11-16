@@ -131,6 +131,8 @@ jobs:
           done
       - name: Manifest consistency
         run: node npm/scripts/check-manifests.mjs
+      - name: npm workflow regression tests
+        run: node --test npm/scripts/*.test.mjs
       - name: Packaging smoke build
         run: node npm/scripts/smoke-build.mjs
 

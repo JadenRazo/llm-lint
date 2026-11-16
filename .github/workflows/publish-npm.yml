@@ -18,8 +18,10 @@ name: publish-npm
 #
 #   gh workflow run publish-npm.yml --ref v1.2.3 -f tag=v1.2.3
 #
-# (that requires this workflow file to exist at that tag; for older tags, run it
-# from main and the attestation will name main instead.)
+# (that requires this workflow file to exist at that tag; recover older tags by
+# running from main, and the attestation will name main instead.) Workflow pin
+# checks and install verification tools come from the immutable executing workflow
+# revision; package sources and release scripts still come from the requested tag.
 
 on:
   workflow_dispatch:
@@ -72,15 +74,30 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Checkout executing workflow revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ github.workflow_sha }}
+
+      - name: Verify immutable workflow dependencies
+        run: scripts/check-workflow-pins.sh
+
+      - name: Preserve release verification tools
+        run: |
+          set -euo pipefail
+          # The tag checkout cleans the working tree; keep these tiny operational
+          # modules outside it so older tags use the executing workflow's verifier.
+          release_tools="$(mktemp -d "$RUNNER_TEMP/llm-lint-release-tools.XXXXXX")"
+          printf 'LLM_LINT_RELEASE_TOOLS=%s\n' "$release_tools" >> "$GITHUB_ENV"
+          cp npm/scripts/verify-published.mjs npm/scripts/platforms.mjs "$release_tools/"
+
+      - name: Checkout release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           # The parent package ships bin/llm-lint.js and npm/README.md from the
           # working tree, so it must be the tree the release was cut from.
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-
-      - name: Verify immutable workflow dependencies
-        run: scripts/check-workflow-pins.sh
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
@@ -201,7 +218,7 @@ jobs:
         if: ${{ inputs.dry_run != true }}
         env:
           TAG: ${{ inputs.tag }}
-        run: node npm/scripts/verify-published.mjs --version "${TAG#v}"
+        run: node "$LLM_LINT_RELEASE_TOOLS/verify-published.mjs" --version "${TAG#v}"
 
       - name: Confirm npm and GitHub now agree
         # Only meaningful for the newest release; a backfill of an older tag is
@@ -212,3 +229,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: node npm/scripts/check-release-sync.mjs
+
+      - name: Clean up release verification tools
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          if [ -n "${LLM_LINT_RELEASE_TOOLS:-}" ]; then
+            case "$LLM_LINT_RELEASE_TOOLS" in
+              "$RUNNER_TEMP"/llm-lint-release-tools.*)
+                rm -rf -- "$LLM_LINT_RELEASE_TOOLS"
+                ;;
+            esac
+          fi
