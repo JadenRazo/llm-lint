@@ -34,7 +34,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      id-token: write # so the auth preflight can exercise the OIDC path
+      id-token: write # exposes OIDC configuration for preflight; does not prove publish access
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
@@ -65,7 +65,23 @@ jobs:
           cat sync.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: npm credential liveness
+      - name: Prepare npm auth configuration
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            exit 0
+          fi
+          npmrc="${NPM_CONFIG_USERCONFIG:-}"
+          if [ -z "$npmrc" ] || [ ! -f "$npmrc" ]; then
+            exit 0
+          fi
+          # Remove only setup-node's literal placeholder; leave other auth for
+          # the validator to inspect, without falling back to a HOME config.
+          sed -i '/^\/\/registry\.npmjs\.org\/:_authToken=${NODE_AUTH_TOKEN}$/d' "$npmrc"
+
+      - name: npm auth configuration preflight
         id: auth
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -75,7 +91,7 @@ jobs:
           code=${PIPESTATUS[0]}
           set -e
           echo "code=$code" >> "$GITHUB_OUTPUT"
-          echo "### npm credential" >> "$GITHUB_STEP_SUMMARY"
+          echo "### npm auth configuration preflight" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           cat auth.txt >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -125,7 +141,7 @@ jobs:
             echo "| Check | Status | What it means |"
             echo "|---|---|---|"
             echo "| GitHub release vs npm \`latest\` | $(verdict "$SYNC") | Users installing from npm get the version this repo advertises |"
-            echo "| npm credential | $(verdict "$AUTH") | The next release will be able to publish |"
+            echo "| npm auth configuration preflight | $(verdict "$AUTH") | Checks local auth configuration; does not prove package publish access |"
             echo "| npm \`latest\` is installable | $(verdict "$INSTALLABLE") | \`npx @jadenrazo/llm-lint\` actually runs |"
             echo
             echo "Last checked: $(date -u '+%Y-%m-%d %H:%M UTC') - [run log]($RUN_URL)"
@@ -176,6 +192,6 @@ jobs:
           set -euo pipefail
           rc=0
           [ "${SYNC:-2}" = "0" ]        || { echo "::error::GitHub release and npm latest disagree"; rc=1; }
-          [ "${AUTH:-2}" = "0" ]        || { echo "::error::npm credential will not publish"; rc=1; }
+          [ "${AUTH:-2}" = "0" ]        || { echo "::error::npm auth configuration preflight failed"; rc=1; }
           [ "${INSTALLABLE:-2}" = "0" ] || { echo "::error::npm latest is not installable"; rc=1; }
           exit $rc
